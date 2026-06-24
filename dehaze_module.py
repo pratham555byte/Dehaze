@@ -9,6 +9,7 @@ from collections import OrderedDict
 from models import *
 from image_conditioning import preprocess_image, postprocess_image
 from utils import chw_to_hwc, hwc_to_chw
+from adas_pipeline import ADASPipelineRunner
 
 def load_state_dict(model_path, device):
     checkpoint = torch.load(model_path, map_location=device)
@@ -54,6 +55,12 @@ class DehazeModule:
         self.fog_estimator = None
         self._load_fog_estimator()
         
+        # ADAS Pipeline & Vehicle State Integration
+        self.adas_pipeline = ADASPipelineRunner(device=self.device)
+        self.vehicle_speed = 0.0
+        self.lidar_distances = None
+        self.is_live = False
+        
         # Thread-safe config update signals
         self.new_model_name = model_name
         self.new_camera_index = 0
@@ -98,6 +105,13 @@ class DehazeModule:
         if self.thread:
             self.thread.join(timeout=2.0)
             self.thread = None
+
+    def update_vehicle_state(self, speed, distances, is_live):
+        """Update vehicle parameters from simulation / hardware loops."""
+        with self.lock:
+            self.vehicle_speed = speed
+            self.lidar_distances = distances
+            self.is_live = is_live
 
     def set_model(self, model_name):
         with self.lock:
@@ -344,19 +358,39 @@ class DehazeModule:
                     out_post = postprocess_image(out_float, self.postprocess_mode)
                     dehazed_uint8 = np.clip(out_post * 255.0, 0, 255).astype(np.uint8)
                 except Exception as e:
-                    # print(f"[DehazeModule] Inference error: {e}")
                     dehazed_uint8 = frame_resized_rgb.copy()
             else:
-                # Bypass: use the original resized frame (convert back to uint8 BGR if needed, but here it's already RGB)
                 dehazed_uint8 = frame_resized_rgb.copy()
-                # Simulate small bypass delay or just use 0 latency
                 
             t_end = time.perf_counter()
             latency_ms = (t_end - t_infer_start) * 1000.0 if active_dehaze else 0.0
             
+            # Run ADAS pipeline checks on the output frame (BGR space mapping)
+            with self.lock:
+                speed = self.vehicle_speed
+                lidar_dists = self.lidar_distances
+                is_live_flag = self.is_live
+                
+            try:
+                # Update current ResNet-18 density in ADAS predictor
+                self.adas_pipeline.update_latest_fog(self.current_density)
+                # Map RGB to BGR for CV operations
+                dehazed_bgr = cv2.cvtColor(dehazed_uint8, cv2.COLOR_RGB2BGR)
+                annotated_bgr = self.adas_pipeline.run_pipeline(
+                    dehazed_bgr, 
+                    speed, 
+                    is_live=is_live_flag, 
+                    lidar_distances=lidar_dists
+                )
+                # Map back to RGB for flask streaming output
+                annotated_rgb = cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
+            except Exception as adas_err:
+                print(f"[DehazeModule] ADAS Execution failure: {adas_err}")
+                annotated_rgb = dehazed_uint8.copy()
+
             with self.lock:
                 self.latest_orig = frame_resized_rgb
-                self.latest_dehazed = dehazed_uint8
+                self.latest_dehazed = annotated_rgb
                 self.latency = latency_ms
 
             # FPS

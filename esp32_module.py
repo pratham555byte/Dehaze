@@ -1,12 +1,14 @@
 import socket
 import threading
 import time
+import requests
 
 class ESP32Communication:
-    def __init__(self, esp32_ip="192.168.4.1", esp32_port=5005, local_port=5006):
+    def __init__(self, esp32_ip="192.168.4.1", esp32_port=5005, local_port=5006, mode="udp"):
         self.esp32_ip = esp32_ip
         self.esp32_port = esp32_port
         self.local_port = local_port
+        self.mode = mode # "udp" or "http"
         
         self.sock = None
         self.running = False
@@ -23,6 +25,11 @@ class ESP32Communication:
         self.dist_r = 300.0
         self.vehicle_speed = 0.0
         
+        # HTTP Control State
+        self.http_throttle = 0
+        self.http_steering = 0
+        self.http_control_updated = False
+        
         # Simulation values (written to by the digital twin when disconnected)
         self.sim_dist_l = 300.0
         self.sim_dist_c = 300.0
@@ -31,17 +38,22 @@ class ESP32Communication:
 
     def start(self):
         self.running = True
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.settimeout(0.1)
         
-        try:
-            self.sock.bind(("", self.local_port))
-            print(f"[ESP32Module] Socket bound to local port {self.local_port}")
-        except Exception as e:
-            print(f"[ESP32Module] Bind warning: {e}")
-            
-        self.thread = threading.Thread(target=self._receive_loop, daemon=True)
-        self.thread.start()
+        if self.mode == "udp":
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.sock.settimeout(0.1)
+            try:
+                self.sock.bind(("", self.local_port))
+                print(f"[ESP32Module] UDP Socket bound to local port {self.local_port}")
+            except Exception as e:
+                print(f"[ESP32Module] UDP Bind warning: {e}")
+                
+            self.thread = threading.Thread(target=self._receive_loop_udp, daemon=True)
+            self.thread.start()
+        else:
+            print(f"[ESP32Module] HTTP Mode started for ESP32 IP: {self.esp32_ip}")
+            self.thread = threading.Thread(target=self._receive_loop_http, daemon=True)
+            self.thread.start()
 
     def stop(self):
         self.running = False
@@ -55,7 +67,7 @@ class ESP32Communication:
                 pass
             self.sock = None
 
-    def _receive_loop(self):
+    def _receive_loop_udp(self):
         buffer_size = 1024
         while self.running:
             try:
@@ -85,15 +97,64 @@ class ESP32Communication:
             
             time.sleep(0.01)
 
-    def send_control(self, throttle, steering):
-        if not self.sock:
-            return
+    def _receive_loop_http(self):
+        while self.running:
+            # 1. Poll Sensors
+            url = f"http://{self.esp32_ip}/sensors"
+            try:
+                resp = requests.get(url, timeout=0.1)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    with self.lock:
+                        # Convert mm from ESP32 to cm for simulator compatibility
+                        self.dist_l = float(data.get("left", 8000.0)) / 10.0
+                        self.dist_c = float(data.get("center", 8000.0)) / 10.0
+                        self.dist_r = float(data.get("right", 8000.0)) / 10.0
+                        # Speed estimation based on throttle
+                        self.vehicle_speed = float(abs(self.http_throttle)) / 10.0
+                        self.last_packet_time = time.time()
+                        self.connected = True
+            except Exception:
+                # Connection timeout or fail
+                pass
             
-        msg = f"CMD,{int(throttle)},{int(steering)}"
-        try:
-            self.sock.sendto(msg.encode("utf-8"), (self.esp32_ip, self.esp32_port))
-        except Exception as e:
-            pass
+            # 2. Send Controls if updated
+            with self.lock:
+                control_updated = self.http_control_updated
+                throttle = self.http_throttle
+                steering = self.http_steering
+                
+            if control_updated:
+                url_motor = f"http://{self.esp32_ip}/motor"
+                try:
+                    # Payload: {"speed": speed, "turn": turn} (Range: -100 to 100)
+                    requests.post(url_motor, json={"speed": int(throttle), "turn": int(steering)}, timeout=0.1)
+                    with self.lock:
+                        self.http_control_updated = False
+                except Exception:
+                    pass
+
+            # Watchdog: mark disconnected if no updates for 2 seconds
+            if time.time() - self.last_packet_time > 2.0:
+                with self.lock:
+                    self.connected = False
+            
+            time.sleep(0.05)
+
+    def send_control(self, throttle, steering):
+        if self.mode == "udp":
+            if not self.sock:
+                return
+            msg = f"CMD,{int(throttle)},{int(steering)}"
+            try:
+                self.sock.sendto(msg.encode("utf-8"), (self.esp32_ip, self.esp32_port))
+            except Exception as e:
+                pass
+        else:
+            with self.lock:
+                self.http_throttle = throttle
+                self.http_steering = steering
+                self.http_control_updated = True
 
     def update_simulated_telemetry(self, l, c, r, speed):
         with self.lock:

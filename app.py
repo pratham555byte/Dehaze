@@ -634,8 +634,18 @@ def twin_processing_loop():
         final_throttle, status_text = acc_system.compute_control(
             acc_enabled, cur_throttle, filtered_distances, v_rel
         )
-        acc_status_text = status_text
         
+        # Check for RED traffic light collision override in ACC and manual braking loops
+        is_red_light = (dehaze_mod.adas_pipeline.traffic_light_status == "RED")
+        if is_red_light:
+            if acc_enabled:
+                final_throttle = 0
+                status_text = "ACC OVERRIDE: RED LIGHT STOP"
+            elif cur_throttle > 0:
+                final_throttle = 0
+                status_text = "OVERRIDE: RED LIGHT BRAKE"
+        
+        acc_status_text = status_text
         esp32_comm.send_control(final_throttle, cur_steer)
         
         sim_readings = twin_sim.update(final_throttle, cur_steer, connected, real_speed, dt)
@@ -645,6 +655,13 @@ def twin_processing_loop():
                 sim_readings[0], sim_readings[1], sim_readings[2], 
                 float(abs(twin_sim.speed) / 10.0)
             )
+            
+        # Update dehazing module vehicle state for ADAS overlays
+        dehaze_mod.update_vehicle_state(
+            speed=real_speed if connected else float(abs(twin_sim.speed) / 10.0),
+            distances=[l_dist, c_dist, r_dist] if connected else [sim_readings[0], sim_readings[1], sim_readings[2]],
+            is_live=connected
+        )
             
         surf = twin_sim.render()
         
@@ -891,6 +908,22 @@ def api_config():
         dehaze_mod.set_manual_override(bool(data["manual_override"]))
     if "threshold" in data:
         dehaze_mod.set_threshold(float(data["threshold"]))
+    if "esp32_ip" in data:
+        esp32_comm.esp32_ip = data["esp32_ip"]
+    if "esp32_mode" in data:
+        new_mode = data["esp32_mode"]
+        if esp32_comm.mode != new_mode:
+            esp32_comm.stop()
+            esp32_comm.mode = new_mode
+            esp32_comm.start()
+    if "distance_mode" in data:
+        dehaze_mod.adas_pipeline.set_distance_mode(data["distance_mode"])
+    if "gps_lat" in data:
+        dehaze_mod.adas_pipeline.lat = float(data["gps_lat"])
+    if "gps_lon" in data:
+        dehaze_mod.adas_pipeline.lon = float(data["gps_lon"])
+    if "cruising_speed" in data:
+        dehaze_mod.adas_pipeline.cruising_speed = float(data["cruising_speed"])
         
     return jsonify({"success": True})
 
@@ -915,10 +948,9 @@ def api_telemetry():
     orig_frame, dehaze_frame, fps, latency_ms = dehaze_mod.get_frames()
     fog_stats = dehaze_mod.get_fog_stats()
     
-    ttc = -1.0
-    if relative_velocity < -0.05:
-        ttc = (c_dist / 100.0) / abs(relative_velocity)
-        
+    # Retrieve pipeline variables
+    runner = dehaze_mod.adas_pipeline
+    
     with state_lock:
         manual_throttle = vehicle_controls["throttle"]
         steering_angle = vehicle_controls["steering"]
@@ -934,7 +966,7 @@ def api_telemetry():
         "dist_c": round(c_dist, 1),
         "dist_r": round(r_dist, 1),
         "v_rel": round(relative_velocity, 2),
-        "ttc": round(ttc, 2) if ttc >= 0 else None,
+        "ttc": round(runner.ttc, 2) if runner.ttc >= 0 else None,
         "dehaze_fps": round(fps, 1),
         "dehaze_latency": round(latency_ms, 1),
         "fallback_active": dehaze_mod.is_fallback,
@@ -942,10 +974,40 @@ def api_telemetry():
         "manual_override": fog_stats["manual_override"],
         "threshold": fog_stats["threshold"],
         "current_density": round(fog_stats["current_density"], 4),
-        "dehazing_active": fog_stats["dehazing_active"]
+        "dehazing_active": fog_stats["dehazing_active"],
+        
+        # Merged ADAS Telemetry fields
+        "risk_score": round(runner.current_risk_score, 2),
+        "risk_level": runner.current_risk_level,
+        "threat_level": runner.current_threat_label,
+        "override_reason": runner.override_reason,
+        "nearest_obj_label": runner.nearest_obj_label,
+        "nearest_obj_dist": round(runner.nearest_obj_dist, 2),
+        "traffic_light_status": runner.traffic_light_status,
+        "llm_advice": runner.cached_llm_response if isinstance(runner.cached_llm_response, dict) else {},
+        "road_name": runner.road_context.get("road_name", "Unknown Road"),
+        "blackspot_active": runner.road_context.get("blackspots", False),
+        
+        # Merged settings indicators
+        "distance_mode": runner.distance_mode,
+        "esp32_mode": esp32_comm.mode,
+        "esp32_ip": esp32_comm.esp32_ip,
+        "gps_lat": runner.lat,
+        "gps_lon": runner.lon,
+        "cruising_speed": runner.cruising_speed
     })
 
 # --- Static results routes ---
+
+@app.route('/api/blackspots', methods=['GET'])
+def api_blackspots():
+    import json
+    try:
+        with open("config/blackspots.json") as f:
+            spots = json.load(f)
+        return jsonify(spots)
+    except Exception as e:
+        return jsonify([])
 
 @app.route('/results/<path:filename>')
 def serve_results(filename):

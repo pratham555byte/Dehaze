@@ -913,7 +913,16 @@
         ::-webkit-scrollbar-thumb:hover {
             background: hsla(220, 20%, 100%, 0.2);
         }
+
+        /* Leaflet custom marker classes */
+        .vehicle-marker-div, .danger-marker-div {
+            background: transparent !important;
+            border: none !important;
+        }
     </style>
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
 
@@ -1282,6 +1291,46 @@
                 </div>
                 <input type="range" id="dehaze-threshold" min="0.05" max="0.60" step="0.01" value="0.20" oninput="document.getElementById('threshold-val').innerText = this.value; updateTwinConfig()" style="accent-color: var(--accent-blue); width: 100%;">
             </div>
+
+            <div class="control-group">
+                <label for="distance-mode-select">DISTANCE CALCULATION MODE</label>
+                <select id="distance-mode-select" onchange="updateTwinConfig()">
+                    <option value="pinhole" selected>Pinhole Focal Geometry (Focal Heights)</option>
+                    <option value="midas">MiDaS Depth Estimation (Neural Map)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="esp32-mode-select">ESP32 VEHICLE MODE</label>
+                <select id="esp32-mode-select" onchange="updateTwinConfig()">
+                    <option value="udp" selected>UDP Wireless (Standard)</option>
+                    <option value="http">HTTP Client-Server (Prototype)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="esp32-ip-input">ESP32 VEHICLE IP</label>
+                <input type="text" id="esp32-ip-input" value="192.168.4.1" placeholder="e.g. 192.168.4.1" onchange="updateTwinConfig()">
+            </div>
+
+            <div class="control-group">
+                <div style="display:flex; justify-content:space-between;">
+                    <label for="cruising-speed">CRUISING SPEED LIMIT</label>
+                    <span id="cruising-speed-val" style="font-size: 0.78rem; font-family: var(--font-headings); color: var(--text-primary);">50</span>
+                </div>
+                <input type="range" id="cruising-speed" min="10" max="120" step="5" value="50" oninput="document.getElementById('cruising-speed-val').innerText = this.value; updateTwinConfig()" style="accent-color: var(--accent-blue); width: 100%;">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <div class="control-group" style="flex: 1;">
+                    <label for="gps-lat-input">GPS LATITUDE</label>
+                    <input type="number" id="gps-lat-input" step="0.0001" value="12.9716" onchange="updateTwinConfig()" style="padding: 12px 14px; font-size: 0.8rem;">
+                </div>
+                <div class="control-group" style="flex: 1;">
+                    <label for="gps-lon-input">GPS LONGITUDE</label>
+                    <input type="number" id="gps-lon-input" step="0.0001" value="77.5946" onchange="updateTwinConfig()" style="padding: 12px 14px; font-size: 0.8rem;">
+                </div>
+            </div>
             
             <div class="panel-title" style="margin-top: 10px;">Keyboard Control</div>
             <div class="keyboard-grid">
@@ -1320,6 +1369,45 @@
             <div class="twin-box">
                 <h3>DIGITAL TWIN SIMULATION</h3>
                 <img src="/stream/twin" id="twin-img" alt="Digital twin simulation" draggable="false">
+            </div>
+
+            <!-- ADAS Spatial & Cognitive Intelligence Row -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 10px;">
+                <!-- Leaflet Accident Blackspot Map -->
+                <div class="panel" style="padding: 16px; min-height: 320px;">
+                    <div class="panel-title" style="font-size: 0.85rem; padding-bottom: 8px;">Spatial Awareness: Proximity to Accident Blackspots</div>
+                    <div id="map" style="height: 240px; border-radius: 10px; border: 1px solid var(--panel-border); background: hsla(220, 18%, 8%, 0.9); z-index: 1;"></div>
+                </div>
+
+                <!-- Ollama AI Co-Driver / Safety Advisor Terminal -->
+                <div class="panel" style="padding: 16px; min-height: 320px;">
+                    <div class="panel-title" style="font-size: 0.85rem; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Ollama ADAS Co-Driver Advisory</span>
+                        <span id="blackspot-warning-badge" class="status-badge disconnected" style="display: none; padding: 2px 8px; font-size: 0.65rem; animation: pulse-animation-live 1s infinite;">BLACKSPOT CORRIDOR DETECTED</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 12px; height: 240px; overflow-y: auto; font-family: var(--font-body); font-size: 0.82rem; background: hsla(220, 18%, 8%, 0.8); border: 1px solid var(--panel-border); border-radius: 10px; padding: 12px;">
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid hsla(220, 20%, 100%, 0.05); padding-bottom: 8px;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">ACTIVE ROAD:</span>
+                            <span id="tel-road-name" style="font-weight: 700; color: #fff;">Unknown Road</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid hsla(220, 20%, 100%, 0.05); padding-bottom: 8px;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">RISK RATING:</span>
+                            <span id="tel-risk-level" style="font-weight: 700; color: var(--accent-green);">LOW (0.0)</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid hsla(220, 20%, 100%, 0.05); padding-bottom: 8px;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">PRIMARY HAZARD:</span>
+                            <span id="tel-hazard-alert" style="font-weight: 700; color: #fff; font-family: var(--font-headings);">None detected</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid hsla(220, 20%, 100%, 0.05); padding-bottom: 8px;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">DRIVING ADVISORY:</span>
+                            <span id="tel-driving-suggestion" style="font-weight: 500; color: #fff;">Maintain safe distance.</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">COGNITIVE EXPLANATION:</span>
+                            <p id="tel-llm-explanation" style="color: var(--text-secondary); font-style: italic; line-height: 1.3;">System is operating under normal clearance.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1434,6 +1522,71 @@
         let progressInterval = null;
         let liveStatsInterval = null;
 
+        // --- Leaflet Map & Spatial Awareness Variables ---
+        let map = null;
+        let vehicleMarker = null;
+        let blackspotMarkers = [];
+        let blackspotCircles = [];
+
+        function initMap() {
+            if (map) return;
+            // Default center is Bangalore
+            map = L.map('map').setView([12.9716, 77.5946], 12);
+            
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+
+            const vehicleIcon = L.divIcon({
+                className: 'vehicle-marker-div',
+                html: '<div style="background-color: var(--accent-green); width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px var(--accent-green);"></div>',
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
+            });
+
+            vehicleMarker = L.marker([12.9716, 77.5946], { icon: vehicleIcon }).addTo(map);
+            vehicleMarker.bindPopup("Ego Vehicle Position");
+
+            // Load predefined accident blackspots from backend
+            fetch('/api/blackspots')
+            .then(res => res.json())
+            .then(spots => {
+                const dangerIcon = L.divIcon({
+                    className: 'danger-marker-div',
+                    html: '<div style="background-color: var(--accent-red); width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid white; box-shadow: 0 0 8px var(--accent-red);"></div>',
+                    iconSize: [10, 10],
+                    iconAnchor: [5, 5]
+                });
+
+                spots.forEach(spot => {
+                    const lat = spot.latitude;
+                    const lon = spot.longitude;
+                    
+                    const marker = L.marker([lat, lon], { icon: dangerIcon }).addTo(map);
+                    marker.bindPopup(`<strong>${spot.name}</strong><br>Type: ${spot.road_type}<br>Risk: ${spot.weather_risk}<br>Severity: ${spot.severity}`);
+                    blackspotMarkers.push(marker);
+
+                    const circle = L.circle([lat, lon], {
+                        color: 'var(--accent-red)',
+                        fillColor: 'var(--accent-red)',
+                        fillOpacity: 0.05,
+                        radius: 2000 // 2km radius
+                    }).addTo(map);
+                    blackspotCircles.push(circle);
+                });
+            })
+            .catch(err => console.error("Error loading blackspots map:", err));
+        }
+
+        function updateMapLocation(lat, lon) {
+            if (!map) return;
+            const newPos = [lat, lon];
+            vehicleMarker.setLatLng(newPos);
+            map.panTo(newPos);
+        }
+
         function switchTab(tabId) {
             // Remove active classes
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -1460,6 +1613,9 @@
                 stopLiveStatsLoop();
                 // Enable connection status badge in header
                 document.getElementById('conn-badge').style.display = "flex";
+                
+                // Initialize Leaflet map
+                setTimeout(initMap, 200);
             }
         }
 
@@ -1875,6 +2031,14 @@
             const manual_override = document.getElementById('manual-dehaze-toggle').checked;
             const threshold = document.getElementById('dehaze-threshold').value;
 
+            // Merged ADAS configuration inputs
+            const distance_mode = document.getElementById('distance-mode-select').value;
+            const esp32_mode = document.getElementById('esp32-mode-select').value;
+            const esp32_ip = document.getElementById('esp32-ip-input').value;
+            const cruising_speed = parseFloat(document.getElementById('cruising-speed').value) || 50;
+            const gps_lat = parseFloat(document.getElementById('gps-lat-input').value) || 12.9716;
+            const gps_lon = parseFloat(document.getElementById('gps-lon-input').value) || 77.5946;
+
             fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1888,7 +2052,13 @@
                     postprocess: postprocess,
                     adaptive_mode: adaptive_mode,
                     manual_override: manual_override,
-                    threshold: parseFloat(threshold)
+                    threshold: parseFloat(threshold),
+                    distance_mode: distance_mode,
+                    esp32_mode: esp32_mode,
+                    esp32_ip: esp32_ip,
+                    cruising_speed: cruising_speed,
+                    gps_lat: gps_lat,
+                    gps_lon: gps_lon
                 })
             });
         }
@@ -2073,6 +2243,89 @@
                 }
                 if (prevTelemetry.dehaze_latency !== data.dehaze_latency) {
                     document.getElementById('val-latency').innerText = data.dehaze_latency.toFixed(1) + " ms";
+                }
+
+                // --- Synergized ADAS Front-End Elements ---
+                
+                // Synchronize config dropdowns/sliders to prevent overwrite race conditions
+                const distSelect = document.getElementById('distance-mode-select');
+                if (document.activeElement !== distSelect && distSelect.value !== data.distance_mode) {
+                    distSelect.value = data.distance_mode;
+                }
+
+                const espModeSelect = document.getElementById('esp32-mode-select');
+                if (document.activeElement !== espModeSelect && espModeSelect.value !== data.esp32_mode) {
+                    espModeSelect.value = data.esp32_mode;
+                }
+
+                const espIpInput = document.getElementById('esp32-ip-input');
+                if (document.activeElement !== espIpInput && espIpInput.value !== data.esp32_ip) {
+                    espIpInput.value = data.esp32_ip;
+                }
+
+                const cruisingSpeedSlider = document.getElementById('cruising-speed');
+                if (document.activeElement !== cruisingSpeedSlider && parseFloat(cruisingSpeedSlider.value) !== data.cruising_speed) {
+                    cruisingSpeedSlider.value = data.cruising_speed;
+                    document.getElementById('cruising-speed-val').innerText = data.cruising_speed.toFixed(0);
+                }
+
+                const latInput = document.getElementById('gps-lat-input');
+                if (document.activeElement !== latInput && parseFloat(latInput.value) !== data.gps_lat) {
+                    latInput.value = data.gps_lat;
+                }
+
+                const lonInput = document.getElementById('gps-lon-input');
+                if (document.activeElement !== lonInput && parseFloat(lonInput.value) !== data.gps_lon) {
+                    lonInput.value = data.gps_lon;
+                }
+
+                // Update Road context & Ollama safety advisor panels
+                if (prevTelemetry.road_name !== data.road_name) {
+                    document.getElementById('tel-road-name').innerText = data.road_name;
+                }
+                
+                if (prevTelemetry.risk_score !== data.risk_score || prevTelemetry.risk_level !== data.risk_level) {
+                    const riskVal = document.getElementById('tel-risk-level');
+                    riskVal.innerText = `${data.risk_level} (${data.risk_score.toFixed(2)})`;
+                    
+                    let riskColor = 'var(--accent-green)';
+                    if (data.risk_level === 'CRITICAL' || data.risk_level === 'HIGH') {
+                        riskColor = 'var(--accent-red)';
+                    } else if (data.risk_level === 'MODERATE') {
+                        riskColor = 'var(--accent-yellow)';
+                    }
+                    riskVal.style.color = riskColor;
+                }
+
+                // Blackspot warning indicator
+                const blackspotBadge = document.getElementById('blackspot-warning-badge');
+                if (data.blackspot_active) {
+                    blackspotBadge.style.display = "inline-block";
+                } else {
+                    blackspotBadge.style.display = "none";
+                }
+
+                // Ollama advisor texts
+                const advice = data.llm_advice || {};
+                const currentHazard = advice.hazard_alert || "None detected";
+                const currentSuggestion = advice.driving_suggestion || "Maintain safe distance.";
+                const currentExplanation = advice.short_explanation || "System operating normally.";
+
+                document.getElementById('tel-hazard-alert').innerText = currentHazard;
+                document.getElementById('tel-driving-suggestion').innerText = currentSuggestion;
+                document.getElementById('tel-llm-explanation').innerText = currentExplanation;
+
+                if (advice.priority_hazard === 'collision') {
+                    document.getElementById('tel-hazard-alert').style.color = 'var(--accent-red)';
+                } else if (advice.priority_hazard === 'visibility') {
+                    document.getElementById('tel-hazard-alert').style.color = 'var(--accent-yellow)';
+                } else {
+                    document.getElementById('tel-hazard-alert').style.color = '#fff';
+                }
+
+                // Map location pans
+                if (prevTelemetry.gps_lat !== data.gps_lat || prevTelemetry.gps_lon !== data.gps_lon) {
+                    updateMapLocation(data.gps_lat, data.gps_lon);
                 }
 
                 // Cache the current telemetry for next comparison

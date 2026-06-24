@@ -1,0 +1,146 @@
+[
+  {
+    "input": {
+      "fog_density": 95,
+      "nearest_object_m": 4,
+      "road_type": "curve",
+      "fog_trend": "worsening"
+    },
+    "output": {
+      "risk_level": "CRITICAL",
+      "hazard_alert": "Vehicle 4m ahead in critical fog",
+      "recommended_speed": "0 km/h",
+      "driving_suggestion": "Emergency brake \u2014 stop immediately",
+      "priority_hazard": "collision",
+      "voice_alert": "Emergency brake now"
+    }
+  },
+  {
+    "input": {
+      "fog_density": 92,
+      "nearest_object_m": 3,
+      "road_type": "highway",
+      "fog_trend": "worsening"
+    },
+    "output": {
+      "risk_level": "CRITICAL",
+      "hazard_alert": "Object 3m ahead in critical fog",
+      "recommended_speed": "0 km/h",
+      "driving_suggestion": "Brake hard and stop safely",
+      "priority_hazard": "collision",
+      "voice_alert": "Stop now, object very close"
+    }
+  },
+  {
+    "input": {
+      "fog_density": 85,
+      "nearest_object_m": 9,
+      "road_type": "highway",
+      "fog_trend": "stable"
+    },
+    "output": {
+      "risk_level": "HIGH",
+      "hazard_alert": "Vehicle 9m ahead in dense fog",
+      "recommended_speed": "25 km/h",
+      "driving_suggestion": "Slow down and increase following distance",
+      "priority_hazard": "collision",
+      "voice_alert": "Vehicle close, slow down"
+    }
+  },
+  {
+    "input": {
+      "fog_density": 78,
+      "nearest_object_m": 15,
+      "road_type": "curve",
+      "fog_trend": "worsening"
+    },
+    "output": {
+      "risk_level": "HIGH",
+      "hazard_alert": "Vehicle ahead on foggy curve",
+      "recommended_speed": "30 km/h",
+      "driving_suggestion": "Reduce speed immediately on curve",
+      "priority_hazard": "collision",
+      "voice_alert": "Vehicle ahead, slow down"
+    }
+  },
+  {
+    "input": {
+      "fog_density": 82,
+      "nearest_object_m": 25,
+      "road_type": "urban",
+      "fog_trend": "stable"
+    },
+    "output": {
+      "risk_level": "HIGH",
+      "hazard_alert": "Dense fog in urban area",
+      "recommended_speed": "35 km/h",
+      "driving_suggestion": "Use fog lights and reduce speed",
+      "priority_hazard": "visibility",
+      "voice_alert": "Dense fog, use fog lights"
+    }
+  },
+  {
+    "input": {
+      "fog_density": 60,
+      "nearest_object_m": 18,
+      "road_type": "highway",
+      "fog_trend": "stable"
+    },
+    "output": {
+      "risk_level": "MODERATE",
+      "hazard_alert": "Moderate fog reduces visibility",
+      "recommended_speed": "50 km/h",
+      "driving_suggestion": "Maintain safe distance and stay alert",
+      "priority_hazard": "visibility",
+      "voice_alert": "Fog ahead, reduce speed"
+    }
+  },
+  {
+    "input": {
+      "fog_density": 55,
+      "nearest_object_m": 12,
+      "road_type": "wet",
+      "fog_trend": "improving"
+    },
+    "output": {
+      "risk_level": "MODERATE",
+      "hazard_alert": "Wet road with moderate fog",
+      "recommended_speed": "45 km/h",
+      "driving_suggestion": "Slow for wet road surface",
+      "priority_hazard": "speed",
+      "voice_alert": "Wet road, slow down"
+    }
+  },
+  {
+    "input": {
+      "fog_density": 20,
+      "nearest_object_m": 40,
+      "road_type": "highway",
+      "fog_trend": "improving"
+    },
+    "output": {
+      "risk_level": "LOW",
+      "hazard_alert": "Clear highway conditions",
+      "recommended_speed": "80 km/h",
+      "driving_suggestion": "Maintain speed and stay aware",
+      "priority_hazard": "none",
+      "voice_alert": "Conditions clear, drive safely"
+    }
+  },
+  {
+    "input": {
+      "fog_density": 10,
+      "nearest_object_m": 60,
+      "road_type": "urban",
+      "fog_trend": "stable"
+    },
+    "output": {
+      "risk_level": "LOW",
+      "hazard_alert": "No significant hazards detected",
+      "recommended_speed": "50 km/h",
+      "driving_suggestion": "Observe speed limits in urban zone",
+      "priority_hazard": "none",
+      "voice_alert": "All clear, drive carefully"
+    }
+  }
+]
