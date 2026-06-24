@@ -25,7 +25,7 @@ class DehazeModule:
         self.model_name = model_name
         self.resolution = resolution
         self.camera_index = 0 # default to Front camera
-        self.fp16 = False
+        self.fp16 = True
         self.preprocess_mode = 'video'
         self.postprocess_mode = 'video'
         
@@ -48,7 +48,7 @@ class DehazeModule:
         self.new_model_name = model_name
         self.new_camera_index = 0
         self.new_resolution = resolution
-        self.new_fp16 = False
+        self.new_fp16 = True
         self.new_preprocess_mode = 'video'
         self.new_postprocess_mode = 'video'
         self.reconfig_model_flag = False

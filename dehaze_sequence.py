@@ -113,8 +113,8 @@ def main():
         help='Resize frames so the longest side is at most this value. Use 0 for original resolution.'
     )
     parser.add_argument('--comparison', action='store_true', help='Also write a side-by-side source/dehazed video.')
-    parser.add_argument('--preprocess', default='none', choices=['none', 'video'])
-    parser.add_argument('--postprocess', default='none', choices=['none', 'video'])
+    parser.add_argument('--preprocess', default='none', choices=['none', 'video', 'clahe'])
+    parser.add_argument('--postprocess', default='none', choices=['none', 'video', 'sharpen'])
     parser.add_argument('--fp16', action='store_true', help='Use half precision (float16) for inference on CUDA.')
     args = parser.parse_args()
 

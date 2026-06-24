@@ -60,6 +60,8 @@ def unsharp_mask(img, amount=0.18, sigma=1.0):
 def preprocess_image(img, mode):
     if mode == 'none':
         return img
+    if mode == 'clahe':
+        return np.clip(clahe_luminance(img), 0, 1)
     if mode != 'video':
         raise ValueError(f'Unknown preprocess mode: {mode}')
 
@@ -72,6 +74,8 @@ def preprocess_image(img, mode):
 def postprocess_image(img, mode):
     if mode == 'none':
         return img
+    if mode == 'sharpen':
+        return np.clip(unsharp_mask(img), 0, 1)
     if mode != 'video':
         raise ValueError(f'Unknown postprocess mode: {mode}')
 
@@ -80,3 +84,4 @@ def postprocess_image(img, mode):
     img = boost_saturation(img)
     img = unsharp_mask(img)
     return np.clip(img, 0, 1)
+

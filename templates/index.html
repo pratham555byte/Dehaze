@@ -975,6 +975,7 @@
                         <label>Preprocessing Mode</label>
                         <select name="preprocess">
                             <option value="video">Video Conditioning</option>
+                            <option value="clahe">CLAHE Contrast</option>
                             <option value="none">None</option>
                         </select>
                     </div>
@@ -983,6 +984,7 @@
                         <label>Postprocessing Mode</label>
                         <select name="postprocess">
                             <option value="video">Video Enhancement</option>
+                            <option value="sharpen">Lil Sharpening</option>
                             <option value="none">None</option>
                         </select>
                     </div>
@@ -1100,6 +1102,7 @@
                 <label>Preprocessing Mode</label>
                 <select id="live-preprocess">
                     <option value="video">Video Conditioning</option>
+                    <option value="clahe">CLAHE Contrast</option>
                     <option value="none">None</option>
                 </select>
             </div>
@@ -1108,6 +1111,7 @@
                 <label>Postprocessing Mode</label>
                 <select id="live-postprocess">
                     <option value="video">Video Enhancement</option>
+                    <option value="sharpen">Lil Sharpening</option>
                     <option value="none">None</option>
                 </select>
             </div>
@@ -1224,7 +1228,7 @@
 
             <div class="control-group" style="display:flex; flex-direction:row; gap:20px;">
                 <label class="checkbox-container">
-                    <input type="checkbox" id="twin-fp16" onchange="updateTwinConfig()">
+                    <input type="checkbox" id="twin-fp16" onchange="updateTwinConfig()" checked>
                     <span>FP16 Acceleration</span>
                 </label>
             </div>
@@ -1233,6 +1237,7 @@
                 <label for="twin-preprocess">PREPROCESSING MODE</label>
                 <select id="twin-preprocess" onchange="updateTwinConfig()">
                     <option value="video">Video Conditioning</option>
+                    <option value="clahe">CLAHE Contrast</option>
                     <option value="none">None</option>
                 </select>
             </div>
@@ -1241,6 +1246,7 @@
                 <label for="twin-postprocess">POSTPROCESSING MODE</label>
                 <select id="twin-postprocess" onchange="updateTwinConfig()">
                     <option value="video">Video Enhancement</option>
+                    <option value="sharpen">Lil Sharpening</option>
                     <option value="none">None</option>
                 </select>
             </div>

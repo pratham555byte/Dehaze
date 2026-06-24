@@ -65,8 +65,8 @@ def main():
     parser.add_argument('--device', default='auto', choices=['auto', 'cuda', 'cpu'])
     parser.add_argument('--max-side', default=1280, type=int, help='Use 0 for original resolution.')
     parser.add_argument('--comparison', action='store_true', help='Write a side-by-side source/dehazed video.')
-    parser.add_argument('--preprocess', default='video', choices=['none', 'video'])
-    parser.add_argument('--postprocess', default='video', choices=['none', 'video'])
+    parser.add_argument('--preprocess', default='video', choices=['none', 'video', 'clahe'])
+    parser.add_argument('--postprocess', default='video', choices=['none', 'video', 'sharpen'])
     parser.add_argument('--fp16', action='store_true', help='Use half precision (float16) for inference on CUDA.')
     args = parser.parse_args()
 

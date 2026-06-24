@@ -54,8 +54,8 @@ def main():
     ])
     parser.add_argument('--weights', default=None, help='Path to a .pth file. Defaults to save_models/outdoor/<model>.pth.')
     parser.add_argument('--device', default='auto', choices=['auto', 'cuda', 'cpu'])
-    parser.add_argument('--preprocess', default='none', choices=['none', 'video'])
-    parser.add_argument('--postprocess', default='none', choices=['none', 'video'])
+    parser.add_argument('--preprocess', default='none', choices=['none', 'video', 'clahe'])
+    parser.add_argument('--postprocess', default='none', choices=['none', 'video', 'sharpen'])
     parser.add_argument('--fp16', action='store_true', help='Use half precision (float16) for inference on CUDA.')
     args = parser.parse_args()
 
