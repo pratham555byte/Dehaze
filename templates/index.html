@@ -1259,6 +1259,30 @@
                 </label>
             </div>
             
+            <div class="switch-container">
+                <span class="switch-label">ADAPTIVE DEHAZING (AUTO)</span>
+                <label class="switch">
+                    <input type="checkbox" id="adaptive-dehaze-toggle" onchange="updateTwinConfig()" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="switch-container">
+                <span class="switch-label">FORCE DEHAZER ON</span>
+                <label class="switch">
+                    <input type="checkbox" id="manual-dehaze-toggle" onchange="updateTwinConfig()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="control-group">
+                <div style="display:flex; justify-content:space-between;">
+                    <label for="dehaze-threshold">HAZE THRESHOLD</label>
+                    <span id="threshold-val" style="font-size: 0.78rem; font-family: var(--font-headings); color: var(--text-primary);">0.20</span>
+                </div>
+                <input type="range" id="dehaze-threshold" min="0.05" max="0.60" step="0.01" value="0.20" oninput="document.getElementById('threshold-val').innerText = this.value; updateTwinConfig()" style="accent-color: var(--accent-blue); width: 100%;">
+            </div>
+            
             <div class="panel-title" style="margin-top: 10px;">Keyboard Control</div>
             <div class="keyboard-grid">
                 <div></div>
@@ -1310,6 +1334,21 @@
             <div class="tel-card">
                 <div class="tel-label">ACC SYSTEM MODE</div>
                 <div class="tel-value" id="val-acc-status" style="font-size: 1.15rem; color: var(--accent-blue);">MANUAL</div>
+            </div>
+
+            <div class="tel-card">
+                <div class="tel-label">FOG DETECTION STATUS</div>
+                <div class="tel-value" id="val-fog-status" style="font-size: 1.05rem; color: var(--accent-green);">CLEAR (BYPASSED)</div>
+            </div>
+
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Fog Density Score</span>
+                    <span id="txt-fog-density">0.0000</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-fog-density" style="background-color: var(--accent-blue);"></div>
+                </div>
             </div>
             
             <div class="tel-card">
@@ -1832,6 +1871,9 @@
             const fp16 = document.getElementById('twin-fp16').checked;
             const preprocess = document.getElementById('twin-preprocess').value;
             const postprocess = document.getElementById('twin-postprocess').value;
+            const adaptive_mode = document.getElementById('adaptive-dehaze-toggle').checked;
+            const manual_override = document.getElementById('manual-dehaze-toggle').checked;
+            const threshold = document.getElementById('dehaze-threshold').value;
 
             fetch('/api/config', {
                 method: 'POST',
@@ -1843,7 +1885,10 @@
                     resolution: parseInt(resolution),
                     fp16: fp16,
                     preprocess: preprocess,
-                    postprocess: postprocess
+                    postprocess: postprocess,
+                    adaptive_mode: adaptive_mode,
+                    manual_override: manual_override,
+                    threshold: parseFloat(threshold)
                 })
             });
         }
@@ -1932,6 +1977,32 @@
                         statusColor = 'var(--accent-yellow)';
                     }
                     document.getElementById('val-acc-status').style.color = statusColor;
+                }
+
+                if (prevTelemetry.adaptive_mode !== data.adaptive_mode) {
+                    document.getElementById('adaptive-dehaze-toggle').checked = data.adaptive_mode;
+                }
+                if (prevTelemetry.manual_override !== data.manual_override) {
+                    document.getElementById('manual-dehaze-toggle').checked = data.manual_override;
+                }
+                if (prevTelemetry.threshold !== data.threshold) {
+                    document.getElementById('dehaze-threshold').value = data.threshold;
+                    document.getElementById('threshold-val').innerText = data.threshold.toFixed(2);
+                }
+                if (prevTelemetry.current_density !== data.current_density) {
+                    document.getElementById('txt-fog-density').innerText = data.current_density.toFixed(4);
+                    const fogPct = Math.min(100, Math.max(0, (data.current_density / 0.60) * 100));
+                    document.getElementById('bar-fog-density').style.width = fogPct + "%";
+                }
+                if (prevTelemetry.dehazing_active !== data.dehazing_active) {
+                    const fogStatusEl = document.getElementById('val-fog-status');
+                    if (data.dehazing_active) {
+                        fogStatusEl.innerText = "FOG DETECTED (DEHAZING ACTIVE)";
+                        fogStatusEl.style.color = "var(--accent-red)";
+                    } else {
+                        fogStatusEl.innerText = "CLEAR (BYPASSED)";
+                        fogStatusEl.style.color = "var(--accent-green)";
+                    }
                 }
 
                 if (prevTelemetry.speed !== data.speed) {

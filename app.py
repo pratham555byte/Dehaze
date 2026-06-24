@@ -885,6 +885,12 @@ def api_config():
         dehaze_mod.set_preprocess(data["preprocess"])
     if "postprocess" in data:
         dehaze_mod.set_postprocess(data["postprocess"])
+    if "adaptive_mode" in data:
+        dehaze_mod.set_adaptive_mode(bool(data["adaptive_mode"]))
+    if "manual_override" in data:
+        dehaze_mod.set_manual_override(bool(data["manual_override"]))
+    if "threshold" in data:
+        dehaze_mod.set_threshold(float(data["threshold"]))
         
     return jsonify({"success": True})
 
@@ -907,6 +913,7 @@ def api_telemetry():
     
     # Correct unpacking of DehazeModule stats to prevent TypeError
     orig_frame, dehaze_frame, fps, latency_ms = dehaze_mod.get_frames()
+    fog_stats = dehaze_mod.get_fog_stats()
     
     ttc = -1.0
     if relative_velocity < -0.05:
@@ -930,7 +937,12 @@ def api_telemetry():
         "ttc": round(ttc, 2) if ttc >= 0 else None,
         "dehaze_fps": round(fps, 1),
         "dehaze_latency": round(latency_ms, 1),
-        "fallback_active": dehaze_mod.is_fallback
+        "fallback_active": dehaze_mod.is_fallback,
+        "adaptive_mode": fog_stats["adaptive_mode"],
+        "manual_override": fog_stats["manual_override"],
+        "threshold": fog_stats["threshold"],
+        "current_density": round(fog_stats["current_density"], 4),
+        "dehazing_active": fog_stats["dehazing_active"]
     })
 
 # --- Static results routes ---

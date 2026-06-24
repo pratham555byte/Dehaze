@@ -44,6 +44,16 @@ class DehazeModule:
         self.latency = 0.0
         self.is_fallback = False
         
+        # Adaptive Dehazing state
+        self.adaptive_mode = True
+        self.manual_override = False
+        self.threshold = 0.20
+        self.current_density = 0.0
+        self.dehazing_active = False
+        self.last_density_check = 0.0
+        self.fog_estimator = None
+        self._load_fog_estimator()
+        
         # Thread-safe config update signals
         self.new_model_name = model_name
         self.new_camera_index = 0
@@ -62,6 +72,21 @@ class DehazeModule:
             os.path.dirname(__file__), 
             "Cycling in Foggy weather. Riding To Jaam Gate. #cycling #nature #greenery #fog #mountains #clouds.mp4"
         )
+
+    def _load_fog_estimator(self):
+        try:
+            from fog_estimator_architecture import FogEstimator
+            self.fog_estimator = FogEstimator().to(self.device)
+            weights_path = os.path.join(os.path.dirname(__file__), 'fog_estimator.pth')
+            if os.path.exists(weights_path):
+                state_dict = torch.load(weights_path, map_location=self.device)
+                self.fog_estimator.load_state_dict(state_dict)
+                self.fog_estimator.eval()
+                print("[DehazeModule] Fog density estimator loaded successfully.")
+            else:
+                print(f"[DehazeModule] Warning: fog_estimator.pth not found at {weights_path}")
+        except Exception as e:
+            print(f"[DehazeModule] Error loading fog density estimator: {e}")
 
     def start(self):
         self.running = True
@@ -115,6 +140,31 @@ class DehazeModule:
                 self.new_postprocess_mode = mode
                 self.reconfig_postprocess_flag = True
                 print(f"[DehazeModule] Set postprocess request: {mode}")
+
+    def set_adaptive_mode(self, enabled):
+        with self.lock:
+            self.adaptive_mode = enabled
+            print(f"[DehazeModule] Set adaptive_mode: {enabled}")
+
+    def set_manual_override(self, enabled):
+        with self.lock:
+            self.manual_override = enabled
+            print(f"[DehazeModule] Set manual_override: {enabled}")
+
+    def set_threshold(self, threshold):
+        with self.lock:
+            self.threshold = threshold
+            print(f"[DehazeModule] Set threshold: {threshold}")
+
+    def get_fog_stats(self):
+        with self.lock:
+            return {
+                "adaptive_mode": self.adaptive_mode,
+                "manual_override": self.manual_override,
+                "threshold": self.threshold,
+                "current_density": self.current_density,
+                "dehazing_active": self.dehazing_active
+            }
 
     def _load_network(self, model_name):
         print(f"[DehazeModule] Loading model {model_name} on {self.device}...")
@@ -237,28 +287,72 @@ class DehazeModule:
 
             frame_resized_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
             
+            # --- ADAPTIVE DEHAZING: FOG DENSITY ESTIMATION CHECK ---
+            now_time = time.perf_counter()
+            with self.lock:
+                adaptive = self.adaptive_mode
+                manual = self.manual_override
+                thresh = self.threshold
+                
+            if self.fog_estimator is not None and (now_time - self.last_density_check >= 60.0 or self.last_density_check == 0.0):
+                self.last_density_check = now_time
+                try:
+                    # Prep image for ResNet-18 (resize to 224x224 and normalize using ImageNet stats)
+                    img_224 = cv2.resize(frame_resized_rgb, (224, 224), interpolation=cv2.INTER_AREA)
+                    img_t = img_224.astype(np.float32) / 255.0
+                    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+                    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+                    img_t = (img_t - mean) / std
+                    
+                    tensor_input = torch.from_numpy(img_t.transpose(2, 0, 1)).unsqueeze(0).to(self.device)
+                    
+                    with torch.no_grad():
+                        score = float(self.fog_estimator(tensor_input).item())
+                    
+                    with self.lock:
+                        self.current_density = score
+                    print(f"[DehazeModule] Fog density: {score:.4f} (threshold: {thresh:.2f})")
+                except Exception as est_err:
+                    print(f"[DehazeModule] Error in fog density estimation: {est_err}")
+            
+            # Decide if we run DehazeFormer
+            active_dehaze = False
+            with self.lock:
+                if manual:
+                    active_dehaze = True
+                elif adaptive:
+                    active_dehaze = (self.current_density > thresh)
+                else:
+                    active_dehaze = False
+                self.dehazing_active = active_dehaze
+
             # Dehazing inference
             t_infer_start = time.perf_counter()
-            try:
-                img_float = frame_resized_rgb.astype(np.float32) / 255.0
-                img_pre = preprocess_image(img_float, self.preprocess_mode)
-                
-                with torch.no_grad():
-                    tensor = torch.from_numpy(hwc_to_chw(img_pre * 2 - 1)).unsqueeze(0).to(self.device)
-                    if use_fp16:
-                        tensor = tensor.half()
-                    output = network(tensor).clamp_(-1, 1)
-                    output = output * 0.5 + 0.5
+            if active_dehaze:
+                try:
+                    img_float = frame_resized_rgb.astype(np.float32) / 255.0
+                    img_pre = preprocess_image(img_float, self.preprocess_mode)
                     
-                out_float = chw_to_hwc(output.detach().cpu().squeeze(0).float().numpy())
-                out_post = postprocess_image(out_float, self.postprocess_mode)
-                dehazed_uint8 = np.clip(out_post * 255.0, 0, 255).astype(np.uint8)
-            except Exception as e:
-                # print(f"[DehazeModule] Inference error: {e}")
+                    with torch.no_grad():
+                        tensor = torch.from_numpy(hwc_to_chw(img_pre * 2 - 1)).unsqueeze(0).to(self.device)
+                        if use_fp16:
+                            tensor = tensor.half()
+                        output = network(tensor).clamp_(-1, 1)
+                        output = output * 0.5 + 0.5
+                        
+                    out_float = chw_to_hwc(output.detach().cpu().squeeze(0).float().numpy())
+                    out_post = postprocess_image(out_float, self.postprocess_mode)
+                    dehazed_uint8 = np.clip(out_post * 255.0, 0, 255).astype(np.uint8)
+                except Exception as e:
+                    # print(f"[DehazeModule] Inference error: {e}")
+                    dehazed_uint8 = frame_resized_rgb.copy()
+            else:
+                # Bypass: use the original resized frame (convert back to uint8 BGR if needed, but here it's already RGB)
                 dehazed_uint8 = frame_resized_rgb.copy()
-
+                # Simulate small bypass delay or just use 0 latency
+                
             t_end = time.perf_counter()
-            latency_ms = (t_end - t_infer_start) * 1000.0
+            latency_ms = (t_end - t_infer_start) * 1000.0 if active_dehaze else 0.0
             
             with self.lock:
                 self.latest_orig = frame_resized_rgb
