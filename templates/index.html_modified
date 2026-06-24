@@ -1,0 +1,1436 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fog Vision Hazard Prevention Dashboard</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0b0c10;
+            --panel-bg: rgba(22, 26, 35, 0.75);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #e6ebf5;
+            --text-secondary: #8f9bb3;
+            
+            --accent-blue: #3f8cff;
+            --accent-green: #2ecc71;
+            --accent-yellow: #f1c40f;
+            --accent-red: #e74c3c;
+            
+            --shadow-glow: 0 8px 32px 0 rgba(31, 38, 135, 0.25);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Gradient header */
+        header {
+            background: linear-gradient(90deg, #1f2833 0%, #0b0c10 100%);
+            border-bottom: 1px solid var(--panel-border);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: 1px;
+            color: var(--text-primary);
+        }
+
+        header h1 span {
+            color: var(--accent-blue);
+        }
+
+        /* Tab Navigation Bar */
+        .tab-bar {
+            display: flex;
+            background: rgba(20, 24, 33, 0.9);
+            border-bottom: 1px solid var(--panel-border);
+            padding: 5px 30px;
+            gap: 15px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255,255,255,0.03);
+        }
+
+        .tab-btn.active {
+            color: #ffffff;
+            background: var(--accent-blue);
+            box-shadow: 0 4px 15px rgba(63, 140, 240, 0.4);
+        }
+
+        /* Tab Contents Layout */
+        .tab-content {
+            display: none;
+            flex-grow: 1;
+            padding: 20px;
+        }
+
+        .tab-content.active {
+            display: grid;
+        }
+
+        /* Panels styled with Glassmorphism */
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .panel-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 8px;
+        }
+
+        /* ==============================================================================
+           TAB 1 & TAB 2 STYLES (VIDEO UPLOAD & LIVE IP STREAM)
+           ============================================================================== */
+        .standard-layout {
+            grid-template-columns: 360px 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1920px;
+            margin: 0 auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-group label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        select, input[type="text"], input[type="file"] {
+            background: rgba(30, 35, 45, 0.8);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            padding: 10px;
+            font-size: 0.9rem;
+            outline: none;
+            width: 100%;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input[type="text"]:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .checkbox-container input {
+            cursor: pointer;
+            height: 18px;
+            width: 18px;
+            accent-color: var(--accent-blue);
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(63, 140, 240, 0.3);
+        }
+
+        .btn-primary:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: #34495e;
+        }
+
+        /* Displays Panel */
+        .displays-panel {
+            background: rgba(15, 17, 23, 0.9);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            justify-content: center;
+            align-items: center;
+            min-height: 480px;
+            position: relative;
+        }
+
+        /* Progress Reporting Styles */
+        .progress-container {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: rgba(30,35,45,0.6);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .progress-bar-bg {
+            height: 12px;
+            background: #1b202c;
+            border-radius: 6px;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-blue) 0%, #00d2ff 100%);
+            border-radius: 6px;
+            transition: width 0.2s;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .progress-label {
+            font-weight: 700;
+            font-size: 1rem;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        /* Result Videos */
+        .result-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .result-video-box {
+            width: 100%;
+            max-width: 960px;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--panel-border);
+        }
+
+        .result-video-box video {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* IP Stream Image */
+        .live-stream-box {
+            width: 100%;
+            max-width: 800px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--panel-border);
+            background: #000;
+        }
+
+        .live-stream-box img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* ==============================================================================
+           TAB 3 STYLES (DIGITAL TWIN & HAZARD PREVENTION)
+           ============================================================================== */
+        .twin-layout {
+            grid-template-columns: 320px 1fr 360px;
+            gap: 20px;
+            width: 100%;
+            max-width: 1920px;
+            margin: 0 auto;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .status-badge.connected {
+            background-color: rgba(46, 204, 113, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(46, 204, 113, 0.3);
+        }
+
+        .status-badge.disconnected {
+            background-color: rgba(231, 76, 60, 0.15);
+            color: var(--accent-red);
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+
+        .switch-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(30, 35, 45, 0.4);
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .switch-label {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #2c3e50;
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-green);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        .streams-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .video-box {
+            background: rgba(15, 17, 23, 0.9);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            aspect-ratio: 4/3;
+            position: relative;
+        }
+
+        .video-box h3 {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            z-index: 5;
+        }
+
+        .video-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .twin-box {
+            background: rgba(15, 17, 23, 0.9);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            flex-grow: 1;
+            min-height: 400px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .twin-box h3 {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            z-index: 5;
+        }
+
+        .twin-box img {
+            max-width: 100%;
+            height: 400px;
+            object-fit: contain;
+            cursor: crosshair;
+        }
+
+        .tel-card {
+            background: rgba(30, 35, 45, 0.4);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .tel-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .tel-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .meter-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .meter-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .meter-bar {
+            height: 10px;
+            background: #2c3e50;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .meter-fill {
+            height: 100%;
+            width: 0%;
+            background-color: var(--accent-blue);
+            border-radius: 5px;
+            transition: width 0.15s ease-in-out, background-color 0.15s;
+        }
+
+        .ttc-alert {
+            background: rgba(231, 76, 60, 0.15);
+            border: 2px solid var(--accent-red);
+            color: #ff8080;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            font-weight: 700;
+            animation: pulse 1s infinite alternate;
+            display: none;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 5px rgba(231,76,60,0.5); }
+            100% { box-shadow: 0 0 20px rgba(231,76,60,0.8); }
+        }
+
+        .keyboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 40px);
+            grid-template-rows: repeat(2, 40px);
+            gap: 6px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .key-btn {
+            background: #1b202c;
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            transition: background 0.1s, color 0.1s;
+        }
+
+        .key-btn.active {
+            background: var(--accent-blue);
+            color: #ffffff;
+            box-shadow: 0 0 10px rgba(63, 140, 240, 0.5);
+        }
+
+        .key-btn.space-key {
+            grid-column: span 3;
+            height: 30px;
+            margin-top: 5px;
+            font-size: 0.8rem;
+        }
+
+        .footer-help {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            border: 1px solid var(--panel-border);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1><span>FOG VISION</span> INTERACTION DASHBOARD</h1>
+        <div class="status-badge disconnected" id="conn-badge" style="display:none;">
+            DISCONNECTED
+        </div>
+    </header>
+
+    <div class="tab-bar">
+        <button class="tab-btn active" id="btn-upload" onclick="switchTab('upload')">UPLOAD VIDEO</button>
+        <button class="tab-btn" id="btn-live" onclick="switchTab('live')">LIVE IP FEED</button>
+        <button class="tab-btn" id="btn-twin" onclick="switchTab('twin')">DIGITAL TWIN / ACC</button>
+    </div>
+
+    <!-- ==============================================================================
+       TAB 1: PRE-RECORDED VIDEO DEHAZING
+       ============================================================================== -->
+    <div class="tab-content active standard-layout" id="tab-upload">
+        <div class="panel">
+            <div class="panel-title">Video Configuration</div>
+            
+            <form id="upload-form" onsubmit="submitVideoProcess(event)">
+                <div class="control-group" style="margin-bottom:15px;">
+                    <label>Select Video File</label>
+                    <input type="file" id="upload-file" name="video" accept="video/*" required>
+                </div>
+                
+                <div class="control-group" style="margin-bottom:15px;">
+                    <label>Dehaze Model</label>
+                    <select name="model">
+                        <option value="dehazeformer-t">DehazeFormer - Tiny</option>
+                        <option value="dehazeformer-s">DehazeFormer - Small</option>
+                        <option value="dehazeformer-m">DehazeFormer - Medium</option>
+                        <option value="dehazeformer-b">DehazeFormer - Base</option>
+                    </select>
+                </div>
+                
+                <div class="control-group" style="margin-bottom:15px;">
+                    <label>Target Resolution (Max side)</label>
+                    <select name="resolution">
+                        <option value="1280">1280 px (High Quality)</option>
+                        <option value="640" selected>640 px (Standard)</option>
+                        <option value="320">320 px (Fast)</option>
+                    </select>
+                </div>
+                
+                <div class="control-group" style="margin-bottom:15px; display:flex; flex-direction:row; gap:20px;">
+                    <label class="checkbox-container">
+                        <input type="checkbox" name="fp16" value="true" checked>
+                        <span>FP16 Acceleration</span>
+                    </label>
+                </div>
+
+                <div class="control-group" style="margin-bottom:15px;">
+                    <label>Preprocessing Mode</label>
+                    <select name="preprocess">
+                        <option value="video">Video Conditioning</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+
+                <div class="control-group" style="margin-bottom:15px;">
+                    <label>Postprocessing Mode</label>
+                    <select name="postprocess">
+                        <option value="video">Video Enhancement</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+
+                <div class="control-group" style="margin-bottom:20px;">
+                    <label class="checkbox-container">
+                        <input type="checkbox" name="comparison" value="true" checked>
+                        <span>Comparison Output</span>
+                    </label>
+                </div>
+
+                <button class="btn-primary" type="submit" style="width:100%;">START PROCESSING</button>
+            </form>
+        </div>
+
+        <div class="displays-panel" id="upload-displays">
+            <!-- Idle Display -->
+            <div id="upload-idle">
+                <p style="color:var(--text-secondary); text-align:center;">Upload a hazy video file on the left panel to begin processing.</p>
+            </div>
+            
+            <!-- Progress Display -->
+            <div class="progress-container" id="upload-progress" style="display:none;">
+                <div class="progress-label" id="upload-status-text">EXTRACTING FRAMES...</div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="upload-bar"></div>
+                </div>
+                <div class="progress-stats">
+                    <div>
+                        <div style="font-weight:700;" id="upload-stat-frame">0 / 0</div>
+                        <div style="font-size:0.75rem;">Frames</div>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;" id="upload-stat-fps">0.0</div>
+                        <div style="font-size:0.75rem;">FPS</div>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;" id="upload-stat-eta">0.0s</div>
+                        <div style="font-size:0.75rem;">ETA</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Result Display -->
+            <div class="result-container" id="upload-result" style="display:none;">
+                <h3 style="font-family:'Outfit'; text-transform:uppercase; letter-spacing:1px;" id="upload-result-title">Dehazed Output</h3>
+                <div class="result-video-box">
+                    <video id="upload-video-player" controls></video>
+                </div>
+                <button class="btn-secondary" onclick="resetUploadView()">Process Another Video</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==============================================================================
+       TAB 2: LIVE IP CAMERA DEHAZING
+       ============================================================================== -->
+    <div class="tab-content standard-layout" id="tab-live">
+        <div class="panel">
+            <div class="panel-title">IP Stream Config</div>
+            
+            <div class="control-group">
+                <label>IP Stream Address / RTSP URL</label>
+                <input type="text" id="live-url" placeholder="rtsp://username:password@ip:port/h264" value="http://">
+            </div>
+            
+            <div class="control-group">
+                <label>Dehaze Model</label>
+                <select id="live-model">
+                    <option value="dehazeformer-t">DehazeFormer - Tiny</option>
+                    <option value="dehazeformer-s">DehazeFormer - Small</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Resolution</label>
+                <select id="live-resolution">
+                    <option value="640" selected>640 px</option>
+                    <option value="480">480 px</option>
+                    <option value="320">320 px</option>
+                </select>
+            </div>
+
+            <div class="control-group" style="display:flex; flex-direction:row; gap:20px;">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="live-fp16" checked>
+                    <span>FP16 Acceleration</span>
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label>Preprocessing Mode</label>
+                <select id="live-preprocess">
+                    <option value="video">Video Conditioning</option>
+                    <option value="none">None</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Postprocessing Mode</label>
+                <select id="live-postprocess">
+                    <option value="video">Video Enhancement</option>
+                    <option value="none">None</option>
+                </select>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn-primary" onclick="startLiveFeed()" style="flex:1;">START FEED</button>
+                <button class="btn-secondary" onclick="stopLiveFeed()" style="flex:1; background:#e74c3c;">STOP FEED</button>
+            </div>
+
+            <div class="panel-title" style="margin-top:15px; font-size:1rem;">Recording Control</div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn-primary" onclick="startLiveRecording()" style="flex:1; background:#f39c12; box-shadow:none;">RECORD START</button>
+                <button class="btn-secondary" onclick="stopLiveRecording()" style="flex:1;">RECORD STOP</button>
+            </div>
+            <button class="btn-secondary" onclick="captureLiveSnapshot()" style="width:100%;">CAPTURE SNAPSHOT</button>
+        </div>
+
+        <div class="displays-panel">
+            <div id="live-idle-msg">
+                <p style="color:var(--text-secondary); text-align:center;">IP Camera feed is idle. Configure URL on the left and click Start.</p>
+            </div>
+            <div class="live-stream-box" id="live-stream-container" style="display:none;">
+                <img id="live-mjpeg" src="" alt="Live IP Camera Feed">
+            </div>
+            
+            <div class="footer-help" id="live-stats-box" style="width:100%; max-width:400px; display:none; margin-top:20px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Stream Status:</span>
+                    <span id="live-stat-status" style="font-weight:700;">CONNECTED</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Processing Rate:</span>
+                    <span id="live-stat-fps">0.0 FPS</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Inference Latency:</span>
+                    <span id="live-stat-latency">0.0 ms</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Is Recording:</span>
+                    <span id="live-stat-recording" style="font-weight:700; color:var(--accent-red)">NO</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==============================================================================
+       TAB 3: DIGITAL TWIN / ACC VEHICLE DASHBOARD
+       ============================================================================== -->
+    <div class="tab-content twin-layout" id="tab-twin">
+        <div class="panel">
+            <div class="panel-title">Dashboard Config</div>
+            
+            <div class="control-group">
+                <label for="webcam-select">WEBCAM INTERFACE</label>
+                <select id="webcam-select" onchange="updateTwinConfig()">
+                    <option value="0">Front Camera (USB Index 0)</option>
+                    <option value="1">Back Camera (USB Index 1)</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="model-select">DEHAZE MODEL WEIGHTS</label>
+                <select id="model-select" onchange="updateTwinConfig()">
+                    <option value="dehazeformer-t">DehazeFormer - Tiny (Fastest)</option>
+                    <option value="dehazeformer-s">DehazeFormer - Small (Balanced)</option>
+                    <option value="dehazeformer-m">DehazeFormer - Medium</option>
+                    <option value="dehazeformer-b">DehazeFormer - Base (Strongest)</option>
+                </select>
+            </div>
+            
+            <div class="switch-container">
+                <span class="switch-label">ADAPTIVE CRUISE CONTROL</span>
+                <label class="switch">
+                    <input type="checkbox" id="acc-toggle" onchange="updateTwinConfig()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <div class="panel-title" style="margin-top: 10px;">Keyboard Control</div>
+            <div class="keyboard-grid">
+                <div></div>
+                <div class="key-btn" id="key-w">W</div>
+                <div></div>
+                <div class="key-btn" id="key-a">A</div>
+                <div class="key-btn" id="key-s">S</div>
+                <div class="key-btn" id="key-d">D</div>
+            </div>
+            <div style="display: flex; justify-content: center;">
+                <div class="key-btn space-key" id="key-space" style="width: 132px;">SPACE (BRAKE)</div>
+            </div>
+            
+            <div class="footer-help">
+                <strong>Keyboard Driving Instructions:</strong><br>
+                â€¢ Drive: <strong>W / S</strong> (or Arrow keys)<br>
+                â€¢ Steer: <strong>A / D</strong> (or Arrow keys)<br>
+                â€¢ Halt: <strong>SPACEBAR</strong> (Active brake)<br>
+                â€¢ Mode toggle: Press <strong>M</strong> on keyboard
+            </div>
+        </div>
+
+        <div class="streams-panel">
+            <div class="video-grid">
+                <div class="video-box">
+                    <h3>ORIGINAL STREAM</h3>
+                    <img src="/stream/original" alt="Original hazy stream" onerror="this.src='https://placehold.co/400x300/151717/8F9BB3?text=Stream+Offline';">
+                </div>
+                <div class="video-box">
+                    <h3>DEHAZED OUTPUT</h3>
+                    <img src="/stream/dehazed" alt="Dehazed output" onerror="this.src='https://placehold.co/400x300/151717/8F9BB3?text=Processing...';">
+                </div>
+            </div>
+            
+            <div class="twin-box">
+                <h3>DIGITAL TWIN SIMULATION</h3>
+                <img src="/stream/twin" id="twin-img" alt="Digital twin simulation" draggable="false">
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">Live Telemetry</div>
+            
+            <div class="ttc-alert" id="ttc-box">
+                COLLISION WARNING<br>
+                <span id="ttc-sec">0.0s to impact</span>
+            </div>
+            
+            <div class="tel-card">
+                <div class="tel-label">ACC SYSTEM MODE</div>
+                <div class="tel-value" id="val-acc-status" style="font-size: 1.15rem; color: var(--accent-blue);">MANUAL</div>
+            </div>
+            
+            <div class="tel-card">
+                <div class="tel-label">SPEEDOMETER</div>
+                <div class="tel-value" id="val-speed">0.00 m/s</div>
+            </div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Ego Throttle Output</span>
+                    <span id="txt-throttle">0%</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-throttle"></div>
+                </div>
+            </div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Steering Output Angle</span>
+                    <span id="txt-steering">0Â°</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-steering" style="background-color: var(--accent-yellow);"></div>
+                </div>
+            </div>
+            
+            <div class="panel-title" style="margin-top: 10px;">VL53L0X DISTANCE METERS</div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Left Sensor</span>
+                    <span id="txt-dist-l">300.0 cm</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-dist-l"></div>
+                </div>
+            </div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Center Sensor</span>
+                    <span id="txt-dist-c">300.0 cm</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-dist-c"></div>
+                </div>
+            </div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Right Sensor</span>
+                    <span id="txt-dist-r">300.0 cm</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-dist-r"></div>
+                </div>
+            </div>
+            
+            <div class="tel-card" style="margin-top: 5px;">
+                <div class="tel-label">Obstacle Relative Speed</div>
+                <div class="tel-value" id="val-vrel" style="font-size: 1.25rem;">+0.00 m/s</div>
+            </div>
+            
+            <div class="footer-help" style="margin-top: auto; display: flex; flex-direction: column; gap: 4px;">
+                <div><strong>Dehaze Performance:</strong></div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Model Rate:</span>
+                    <span id="val-fps">0.0 FPS</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Inference latency:</span>
+                    <span id="val-latency">0.0 ms</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Web Navigation / Tab Switching ---
+        let currentTab = 'upload';
+        let telemetryInterval = null;
+        let progressInterval = null;
+        let liveStatsInterval = null;
+
+        function switchTab(tabId) {
+            // Remove active classes
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active classes
+            if (tabId === 'upload') {
+                document.getElementById('btn-upload').classList.add('active');
+                document.getElementById('tab-upload').classList.add('active');
+                currentTab = 'upload';
+                stopTelemetryLoop();
+                stopLiveStatsLoop();
+            } else if (tabId === 'live') {
+                document.getElementById('btn-live').classList.add('active');
+                document.getElementById('tab-live').classList.add('active');
+                currentTab = 'live';
+                stopTelemetryLoop();
+                startLiveStatsLoop();
+            } else if (tabId === 'twin') {
+                document.getElementById('btn-twin').classList.add('active');
+                document.getElementById('tab-twin').classList.add('active');
+                currentTab = 'twin';
+                startTelemetryLoop();
+                stopLiveStatsLoop();
+                // Enable connection status badge in header
+                document.getElementById('conn-badge').style.display = "flex";
+            }
+        }
+
+        // --- TAB 1: PRE-RECORDED VIDEO DEHAZING PIPELINE ---
+        function submitVideoProcess(e) {
+            e.preventDefault();
+            const form = document.getElementById('upload-form');
+            const formData = new FormData(form);
+
+            // Update UI views
+            document.getElementById('upload-idle').style.display = "none";
+            document.getElementById('upload-result').style.display = "none";
+            document.getElementById('upload-progress').style.display = "flex";
+            
+            fetch('/process', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Start progress polling
+                    startProgressLoop();
+                } else {
+                    alert("Error: " + data.error);
+                    resetUploadView();
+                }
+            })
+            .catch(err => {
+                alert("Upload failed: " + err);
+                resetUploadView();
+            });
+        }
+
+        function startProgressLoop() {
+            if (progressInterval) clearInterval(progressInterval);
+            progressInterval = setInterval(pollProgress, 500);
+        }
+
+        function stopProgressLoop() {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+        }
+
+        function pollProgress() {
+            fetch('/progress')
+            .then(res => res.json())
+            .then(data => {
+                const bar = document.getElementById('upload-bar');
+                const label = document.getElementById('upload-status-text');
+                
+                if (data.status === 'idle') {
+                    resetUploadView();
+                    stopProgressLoop();
+                } else if (data.status === 'extracting') {
+                    label.innerText = "Extracting Video Frames...";
+                    bar.style.width = "10%";
+                    document.getElementById('upload-stat-frame').innerText = data.current_frame + " / ?";
+                } else if (data.status === 'loading_model') {
+                    label.innerText = "Loading DehazeModel weights...";
+                    bar.style.width = "20%";
+                } else if (data.status === 'dehazing') {
+                    label.innerText = "Running model inference...";
+                    const pct = Math.round((data.current_frame / data.total_frames) * 70) + 20; // 20% to 90%
+                    bar.style.width = pct + "%";
+                    document.getElementById('upload-stat-frame').innerText = data.current_frame + " / " + data.total_frames;
+                    document.getElementById('upload-stat-fps').innerText = data.fps.toFixed(1);
+                    document.getElementById('upload-stat-eta').innerText = data.eta.toFixed(1) + "s";
+                } else if (data.status === 'compiling') {
+                    label.innerText = "Reassembling H.264 video...";
+                    bar.style.width = "95%";
+                } else if (data.status === 'completed') {
+                    bar.style.width = "100%";
+                    label.innerText = "PROCESSING COMPLETED!";
+                    stopProgressLoop();
+                    
+                    // Display results
+                    setTimeout(() => {
+                        document.getElementById('upload-progress').style.display = "none";
+                        document.getElementById('upload-result').style.display = "flex";
+                        
+                        // Select comparison video if checked, else standard
+                        const videoUrl = data.comparison_video ? data.comparison_video : data.output_video;
+                        document.getElementById('upload-result-title').innerText = data.comparison_video ? "Comparison Output (Hazy vs Dehazed)" : "Dehazed Output";
+                        
+                        const player = document.getElementById('upload-video-player');
+                        player.src = videoUrl;
+                        player.load();
+                        player.play();
+                    }, 500);
+                } else if (data.status === 'error') {
+                    alert("Processing Error: " + data.error);
+                    stopProgressLoop();
+                    resetUploadView();
+                }
+            });
+        }
+
+        function resetUploadView() {
+            document.getElementById('upload-progress').style.display = "none";
+            document.getElementById('upload-result').style.display = "none";
+            document.getElementById('upload-idle').style.display = "block";
+            document.getElementById('upload-file').value = "";
+        }
+
+        // --- TAB 2: LIVE IP STREAM FEED ---
+        function startLiveFeed() {
+            const url = document.getElementById('live-url').value;
+            const model = document.getElementById('live-model').value;
+            const resolution = document.getElementById('live-resolution').value;
+            const fp16 = document.getElementById('live-fp16').checked;
+            const preprocess = document.getElementById('live-preprocess').value;
+            const postprocess = document.getElementById('live-postprocess').value;
+
+            const formData = new FormData();
+            formData.append('url', url);
+            formData.append('model', model);
+            formData.append('resolution', resolution);
+            formData.append('fp16', fp16);
+            formData.append('preprocess', preprocess);
+            formData.append('postprocess', postprocess);
+
+            fetch('/live/start', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('live-idle-msg').style.display = "none";
+                    document.getElementById('live-stream-container').style.display = "block";
+                    document.getElementById('live-stats-box').style.display = "block";
+                    
+                    document.getElementById('live-mjpeg').src = "/live/stream?t=" + new Date().getTime();
+                } else {
+                    alert("Failed to start live camera: " + data.error);
+                }
+            });
+        }
+
+        function stopLiveFeed() {
+            fetch('/live/stop', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('live-mjpeg').src = "";
+                document.getElementById('live-stream-container').style.display = "none";
+                document.getElementById('live-stats-box').style.display = "none";
+                document.getElementById('live-idle-msg').style.display = "block";
+            });
+        }
+
+        function startLiveStatsLoop() {
+            if (liveStatsInterval) clearInterval(liveStatsInterval);
+            liveStatsInterval = setInterval(pollLiveStats, 500);
+        }
+
+        function stopLiveStatsLoop() {
+            if (liveStatsInterval) {
+                clearInterval(liveStatsInterval);
+                liveStatsInterval = null;
+            }
+        }
+
+        function pollLiveStats() {
+            fetch('/live/stats')
+            .then(res => res.json())
+            .then(data => {
+                if (data.active) {
+                    document.getElementById('live-stat-status').innerText = data.connected ? "CONNECTED" : "CONNECTING / BUFFING...";
+                    document.getElementById('live-stat-status').style.color = data.connected ? "var(--accent-green)" : "var(--accent-yellow)";
+                    document.getElementById('live-stat-fps').innerText = data.fps.toFixed(1) + " FPS";
+                    document.getElementById('live-stat-latency').innerText = data.latency.toFixed(1) + " ms";
+                    document.getElementById('live-stat-recording').innerText = data.is_recording ? "YES (RECORDING)" : "NO";
+                    document.getElementById('live-stat-recording').style.color = data.is_recording ? "var(--accent-red)" : "var(--text-secondary)";
+                }
+            });
+        }
+
+        function startLiveRecording() {
+            fetch('/live/record/start', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert("Recording started successfully.");
+                } else {
+                    alert("Recording error: " + data.message);
+                }
+            });
+        }
+
+        function stopLiveRecording() {
+            fetch('/live/record/stop', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert("Recording completed! Saved video available at: " + data.video_url);
+                } else {
+                    alert("Recording error: " + data.error);
+                }
+            });
+        }
+
+        function captureLiveSnapshot() {
+            window.open('/live/snapshot', '_blank');
+        }
+
+        // --- TAB 3: DIGITAL TWIN / ACC SYSTEMS ---
+        let keyState = { w: false, s: false, a: false, d: false, space: false };
+        let keyMap = {
+            'w': 'w', 'ArrowUp': 'w',
+            's': 's', 'ArrowDown': 's',
+            'a': 'a', 'ArrowLeft': 'a',
+            'd': 'd', 'ArrowRight': 'd',
+            ' ': 'space'
+        };
+        let controlChanged = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (currentTab !== 'twin') return;
+            
+            if (e.key === 'm' || e.key === 'M') {
+                const toggle = document.getElementById('acc-toggle');
+                toggle.checked = !toggle.checked;
+                updateTwinConfig();
+                return;
+            }
+            
+            const keyMapped = keyMap[e.key];
+            if (keyMapped) {
+                e.preventDefault();
+                if (!keyState[keyMapped]) {
+                    keyState[keyMapped] = true;
+                    document.getElementById('key-' + keyMapped).classList.add('active');
+                    controlChanged = true;
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            if (currentTab !== 'twin') return;
+            const keyMapped = keyMap[e.key];
+            if (keyMapped) {
+                if (keyState[keyMapped]) {
+                    keyState[keyMapped] = false;
+                    document.getElementById('key-' + keyMapped).classList.remove('active');
+                    controlChanged = true;
+                }
+            }
+        });
+
+        setInterval(() => {
+            if (controlChanged && currentTab === 'twin') {
+                sendControlState();
+                controlChanged = false;
+            }
+        }, 50);
+
+        function sendControlState() {
+            fetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(keyState)
+            });
+        }
+
+        function updateTwinConfig() {
+            const model = document.getElementById('model-select').value;
+            const camera = document.getElementById('webcam-select').value;
+            const acc_enabled = document.getElementById('acc-toggle').checked;
+
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model,
+                    camera: camera,
+                    acc_enabled: acc_enabled
+                })
+            });
+        }
+
+        // Mouse Drag Twin Obstacles
+        const twinImg = document.getElementById('twin-img');
+        
+        twinImg.addEventListener('mousedown', (e) => {
+            sendMouse(e, true);
+        });
+        
+        twinImg.addEventListener('mousemove', (e) => {
+            if (e.buttons === 1) {
+                sendMouse(e, true);
+            }
+        });
+        
+        window.addEventListener('mouseup', (e) => {
+            if (currentTab !== 'twin') return;
+            fetch('/api/mouse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: 0, y: 0, is_pressed: false })
+            });
+        });
+
+        function sendMouse(e, isPressed) {
+            if (currentTab !== 'twin') return;
+            const rect = twinImg.getBoundingClientRect();
+            const scaleX = 580.0 / rect.width;
+            const scaleY = 480.0 / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            fetch('/api/mouse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: x, y: y, is_pressed: isPressed })
+            });
+        }
+
+        function startTelemetryLoop() {
+            if (telemetryInterval) clearInterval(telemetryInterval);
+            telemetryInterval = setInterval(pollTelemetry, 100);
+        }
+
+        function stopTelemetryLoop() {
+            if (telemetryInterval) {
+                clearInterval(telemetryInterval);
+                telemetryInterval = null;
+            }
+            document.getElementById('conn-badge').style.display = "none";
+        }
+
+        function pollTelemetry() {
+            fetch('/api/telemetry')
+            .then(res => res.json())
+            .then(data => {
+                const badge = document.getElementById('conn-badge');
+                if (data.connected) {
+                    badge.className = "status-badge connected";
+                    badge.innerText = "CONNECTED";
+                } else {
+                    badge.className = "status-badge disconnected";
+                    badge.innerText = "DISCONNECTED";
+                }
+                
+                document.getElementById('acc-toggle').checked = data.acc_enabled;
+                document.getElementById('val-acc-status').innerText = data.acc_status;
+                
+                let statusColor = 'var(--accent-blue)';
+                if (data.acc_status.includes("OVERRIDE") || data.acc_status.includes("CRITICAL")) {
+                    statusColor = 'var(--accent-red)';
+                } else if (data.acc_status.includes("ACTIVE")) {
+                    statusColor = 'var(--accent-green)';
+                } else if (data.acc_status.includes("MANUAL")) {
+                    statusColor = 'var(--accent-yellow)';
+                }
+                document.getElementById('val-acc-status').style.color = statusColor;
+
+                document.getElementById('val-speed').innerText = data.speed.toFixed(2) + " m/s";
+                
+                const absThrottle = Math.abs(data.throttle);
+                const pctThrottle = (absThrottle / 200.0) * 100;
+                document.getElementById('txt-throttle').innerText = (data.throttle >= 0 ? "+" : "-") + Math.round(pctThrottle) + "%";
+                document.getElementById('bar-throttle').style.width = pctThrottle + "%";
+                
+                const steerVal = data.steering + 45;
+                const pctSteer = (steerVal / 90.0) * 100;
+                document.getElementById('txt-steering').innerText = (data.steering >= 0 ? "+" : "") + data.steering + "Â°";
+                document.getElementById('bar-steering').style.width = pctSteer + "%";
+
+                const sensors = [
+                    { val: data.dist_l, txt: 'txt-dist-l', bar: 'bar-dist-l' },
+                    { val: data.dist_c, txt: 'txt-dist-c', bar: 'bar-dist-c' },
+                    { val: data.dist_r, txt: 'txt-dist-r', bar: 'bar-dist-r' }
+                ];
+                
+                sensors.forEach(s => {
+                    document.getElementById(s.txt).innerText = s.val.toFixed(1) + " cm";
+                    const pctDist = (s.val / 300.0) * 100;
+                    const fillBar = document.getElementById(s.bar);
+                    fillBar.style.width = pctDist + "%";
+                    
+                    if (s.val < 25.0) {
+                        fillBar.style.backgroundColor = "var(--accent-red)";
+                    } else if (s.val < 50.0) {
+                        fillBar.style.backgroundColor = "var(--accent-yellow)";
+                    } else {
+                        fillBar.style.backgroundColor = "var(--accent-green)";
+                    }
+                });
+
+                let vrelText = data.v_rel.toFixed(2) + " m/s";
+                if (data.v_rel < -0.05) {
+                    document.getElementById('val-vrel').style.color = "var(--accent-red)";
+                    vrelText = "APPROACHING: " + vrelText;
+                } else if (data.v_rel > 0.05) {
+                    document.getElementById('val-vrel').style.color = "var(--accent-green)";
+                    vrelText = "RECEDING: " + vrelText;
+                } else {
+                    document.getElementById('val-vrel').style.color = "var(--text-primary)";
+                }
+                document.getElementById('val-vrel').innerText = vrelText;
+
+                const ttcBox = document.getElementById('ttc-box');
+                if (data.ttc !== null) {
+                    ttcBox.style.display = "block";
+                    document.getElementById('ttc-sec').innerText = data.ttc.toFixed(2) + "s to impact";
+                } else {
+                    ttcBox.style.display = "none";
+                }
+
+                document.getElementById('val-fps').innerText = data.dehaze_fps.toFixed(1) + " FPS";
+                document.getElementById('val-latency').innerText = data.dehaze_latency.toFixed(1) + " ms";
+            });
+        }
+    </script>
+</body>
+</html>
+

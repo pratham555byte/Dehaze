@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fog Vision Hazard Prevention Dashboard</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: hsl(222, 24%, 6%);
+            --panel-bg: hsla(222, 20%, 11%, 0.7);
+            --panel-border: hsla(220, 20%, 100%, 0.06);
+            --text-primary: hsl(220, 25%, 95%);
+            --text-secondary: hsl(220, 14%, 64%);
+            
+            --accent-blue: hsl(217, 91%, 60%);
+            --accent-green: hsl(142, 69%, 52%);
+            --accent-yellow: hsl(38, 92%, 50%);
+            --accent-red: hsl(350, 89%, 60%);
+            
+            --shadow-glow: 0 12px 40px 0 rgba(0, 0, 0, 0.5), 0 0 20px hsla(217, 91%, 60%, 0.05);
+            --font-headings: 'Space Grotesk', sans-serif;
+            --font-body: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            letter-spacing: -0.1px;
+        }
+
+        /* Clean Minimal Header */
+        header {
+            background: hsla(222, 24%, 6%, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--panel-border);
+            padding: 18px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-family: var(--font-headings);
+            font-weight: 700;
+            font-size: 1.35rem;
+            letter-spacing: 0.5px;
+            color: var(--text-primary);
+        }
+
+        header h1 span {
+            color: var(--accent-blue);
+            font-weight: 800;
+        }
+
+        /* Modern Segmented Tab Bar */
+        .tab-bar {
+            display: inline-flex;
+            background: hsla(220, 18%, 10%, 0.6);
+            border: 1px solid var(--panel-border);
+            padding: 4px;
+            border-radius: 12px;
+            margin: 20px 40px 10px 40px;
+            gap: 4px;
+            align-self: flex-start;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: var(--font-headings);
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+            padding: 10px 24px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: hsla(220, 20%, 100%, 0.03);
+        }
+
+        .tab-btn.active {
+            color: #ffffff;
+            background: var(--accent-blue);
+            box-shadow: 0 4px 12px hsla(217, 91%, 60%, 0.25);
+        }
+
+        /* Tab Contents Layout */
+        .tab-content {
+            display: none;
+            flex-grow: 1;
+            padding: 10px 40px 30px 40px;
+        }
+
+        .tab-content.active {
+            display: grid;
+        }
+
+        .tab-content.active.flex-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* Glassmorphism Panel Cards */
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: var(--shadow-glow);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .panel-title {
+            font-family: var(--font-headings);
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-primary);
+            border-bottom: 1px solid hsla(220, 20%, 100%, 0.05);
+            padding-bottom: 12px;
+        }
+
+        /* ==============================================================================
+           TAB 1 & TAB 2 STYLES (VIDEO UPLOAD & LIVE IP STREAM)
+           ============================================================================== */
+        .standard-layout {
+            grid-template-columns: 360px 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1920px;
+            margin: 0 auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-family: var(--font-headings);
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.75px;
+        }
+
+        select, input[type="text"], input[type="file"] {
+            background: hsla(220, 18%, 8%, 0.8);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            padding: 12px 14px;
+            font-size: 0.88rem;
+            font-family: var(--font-body);
+            outline: none;
+            width: 100%;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        select:focus, input[type="text"]:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px hsla(217, 91%, 60%, 0.15);
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            user-select: none;
+        }
+
+        .checkbox-container input {
+            cursor: pointer;
+            height: 16px;
+            width: 16px;
+            accent-color: var(--accent-blue);
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            padding: 14px;
+            font-family: var(--font-headings);
+            font-weight: 600;
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px hsla(217, 91%, 60%, 0.25);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1.5px);
+            box-shadow: 0 6px 20px hsla(217, 91%, 60%, 0.35);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0.5px);
+        }
+
+        .btn-secondary {
+            background: hsla(220, 12%, 20%, 0.6);
+            color: var(--text-primary);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 14px;
+            font-family: var(--font-headings);
+            font-weight: 600;
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: hsla(220, 12%, 25%, 0.8);
+            transform: translateY(-1px);
+        }
+
+        /* Displays Panel */
+        .displays-panel {
+            background: hsla(222, 24%, 5%, 0.65);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            justify-content: center;
+            align-items: center;
+            min-height: 480px;
+            position: relative;
+            box-shadow: inset 0 4px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Progress Reporting Styles */
+        .progress-container {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background: hsla(220, 18%, 10%, 0.75);
+            padding: 30px;
+            border-radius: 14px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .progress-bar-bg {
+            height: 8px;
+            background: hsla(220, 15%, 5%, 0.8);
+            border-radius: 4px;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-blue) 0%, hsl(190, 100%, 50%) 100%);
+            border-radius: 4px;
+            transition: width 0.2s ease;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            text-align: center;
+            font-family: var(--font-headings);
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .progress-label {
+            font-family: var(--font-headings);
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            text-align: center;
+            text-transform: uppercase;
+            color: var(--accent-blue);
+        }
+
+        /* Result Videos */
+        .result-container {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .result-video-box {
+            width: 100%;
+            max-width: 960px;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid var(--panel-border);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .result-video-box video {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* IP Stream Image with Fullscreen support */
+        .live-video-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 960px;
+            background: #000;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid var(--panel-border);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            aspect-ratio: 1280 / 425;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .live-mjpeg-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .live-fullscreen-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            color: #fff;
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .live-fullscreen-btn:hover {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.85);
+            transform: scale(1.05);
+        }
+
+        .live-fullscreen-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Native Fullscreen adjustments */
+        .live-video-wrapper:fullscreen {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            aspect-ratio: auto !important;
+            border-radius: 0 !important;
+            border: none !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: #000 !important;
+        }
+
+        .live-video-wrapper:fullscreen .live-mjpeg-stream {
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+        }
+
+        .live-video-wrapper:-webkit-full-screen {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            aspect-ratio: auto !important;
+            border-radius: 0 !important;
+            border: none !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: #000 !important;
+        }
+
+        .live-video-wrapper:-webkit-full-screen .live-mjpeg-stream {
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+        }
+
+        .recording-badge {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            border: 1px solid var(--accent-red);
+            border-radius: 6px;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            letter-spacing: 0.05em;
+            z-index: 10;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-red);
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse-animation-live 1.5s infinite;
+        }
+
+        @keyframes pulse-animation-live {
+            0% { transform: scale(0.9); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.4; }
+            100% { transform: scale(0.9); opacity: 1; }
+        }
+
+        /* Metrics grid styles */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .metric-box {
+            background: hsla(220, 18%, 10%, 0.65);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        .metric-val {
+            font-family: var(--font-headings);
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .metric-lbl {
+            font-family: var(--font-headings);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.75px;
+        }
+
+        /* Action buttons layout */
+        .output-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .btn-action {
+            background: hsla(220, 12%, 20%, 0.5);
+            border: 1px solid var(--panel-border);
+            color: #fff;
+            padding: 12px 24px;
+            font-size: 0.88rem;
+            font-family: var(--font-headings);
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-action:hover {
+            background: #fff;
+            color: hsl(222, 24%, 6%);
+            transform: translateY(-1.5px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .btn-action-primary {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            box-shadow: 0 4px 12px hsla(217, 91%, 60%, 0.25);
+        }
+
+        .btn-action-primary:hover {
+            background: hsl(217, 91%, 65%);
+            color: #fff;
+            box-shadow: 0 6px 20px hsla(217, 91%, 60%, 0.35);
+        }
+
+        .btn-action-recording {
+            background: linear-gradient(135deg, var(--accent-red) 0%, hsl(350, 70%, 30%) 100%);
+            border-color: var(--accent-red);
+            box-shadow: 0 4px 12px hsla(350, 89%, 60%, 0.25);
+        }
+        
+        .btn-action-recording:hover {
+            background: linear-gradient(135deg, hsl(350, 89%, 68%) 0%, var(--accent-red) 100%);
+            color: #fff;
+            box-shadow: 0 6px 20px hsla(350, 89%, 60%, 0.35);
+        }
+
+        /* ==============================================================================
+           TAB 3 STYLES (DIGITAL TWIN & HAZARD PREVENTION)
+           ============================================================================== */
+        .twin-layout {
+            grid-template-columns: 320px 1fr 340px;
+            gap: 24px;
+            width: 100%;
+            max-width: 1920px;
+            margin: 0 auto;
+        }
+
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-family: var(--font-headings);
+            font-size: 0.78rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+
+        .status-badge.connected {
+            background-color: hsla(142, 69%, 52%, 0.12);
+            color: var(--accent-green);
+            border: 1px solid hsla(142, 69%, 52%, 0.25);
+        }
+
+        .status-badge.disconnected {
+            background-color: hsla(350, 89%, 60%, 0.12);
+            color: var(--accent-red);
+            border: 1px solid hsla(350, 89%, 60%, 0.25);
+        }
+
+        .switch-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: hsla(220, 18%, 10%, 0.65);
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .switch-label {
+            font-family: var(--font-headings);
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 22px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: hsla(220, 12%, 25%, 0.8);
+            transition: .2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 22px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-green);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(22px);
+        }
+
+        .streams-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .video-box {
+            background: hsla(222, 24%, 5%, 0.65);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            aspect-ratio: 4/3;
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .video-box h3 {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: hsla(220, 15%, 5%, 0.75);
+            backdrop-filter: blur(4px);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-family: var(--font-headings);
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            z-index: 5;
+            color: var(--text-primary);
+            border: 1px solid hsla(220, 20%, 100%, 0.05);
+        }
+
+        .video-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .twin-box {
+            background: hsla(222, 24%, 5%, 0.65);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            flex-grow: 1;
+            min-height: 400px;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .twin-box h3 {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: hsla(220, 15%, 5%, 0.75);
+            backdrop-filter: blur(4px);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-family: var(--font-headings);
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            z-index: 5;
+            color: var(--text-primary);
+            border: 1px solid hsla(220, 20%, 100%, 0.05);
+        }
+
+        .twin-box img {
+            max-width: 100%;
+            height: 400px;
+            object-fit: contain;
+            cursor: crosshair;
+        }
+
+        .tel-card {
+            background: hsla(220, 18%, 10%, 0.65);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .tel-label {
+            font-family: var(--font-headings);
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.75px;
+        }
+
+        .tel-value {
+            font-family: var(--font-headings);
+            font-size: 1.45rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .meter-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .meter-info {
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--font-headings);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .meter-bar {
+            height: 8px;
+            background: hsla(220, 15%, 5%, 0.8);
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid hsla(220, 20%, 100%, 0.02);
+        }
+
+        .meter-fill {
+            height: 100%;
+            width: 0%;
+            background-color: var(--accent-blue);
+            border-radius: 4px;
+            transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s;
+        }
+
+        .ttc-alert {
+            background: hsla(350, 89%, 60%, 0.12);
+            border: 1.5px solid var(--accent-red);
+            color: hsl(350, 100%, 80%);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            font-family: var(--font-headings);
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+            font-weight: 700;
+            animation: pulse 1s infinite alternate;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            /* Reserve space in layout to prevent flicker */
+            max-height: 0;
+            padding: 0 16px;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .ttc-alert.visible {
+            visibility: visible;
+            opacity: 1;
+            max-height: 80px;
+            padding: 16px;
+            margin: 0;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 5px rgba(231,76,60,0.5); }
+            100% { box-shadow: 0 0 20px rgba(231,76,60,0.8); }
+        }
+
+        .keyboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 40px);
+            grid-template-rows: repeat(2, 40px);
+            gap: 6px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .key-btn {
+            background: hsla(220, 18%, 10%, 0.65);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: var(--font-headings);
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+        }
+
+        .key-btn.active {
+            background: var(--accent-blue);
+            color: #ffffff;
+            box-shadow: 0 0 12px hsla(217, 91%, 60%, 0.4);
+            border-color: var(--accent-blue);
+        }
+
+        .key-btn.space-key {
+            grid-column: span 3;
+            height: 30px;
+            margin-top: 5px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .footer-help {
+            font-size: 0.76rem;
+            color: var(--text-secondary);
+            line-height: 1.45;
+            padding: 12px 14px;
+            background: hsla(220, 20%, 5%, 0.3);
+            border-radius: 8px;
+            border: 1px solid var(--panel-border);
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: hsl(222, 24%, 6%);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: hsla(220, 20%, 100%, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: hsla(220, 20%, 100%, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1><span>FOG VISION</span> INTERACTION DASHBOARD</h1>
+        <div class="status-badge disconnected" id="conn-badge" style="display:none;">
+            DISCONNECTED
+        </div>
+    </header>
+
+    <div class="tab-bar">
+        <button class="tab-btn active" id="btn-upload" onclick="switchTab('upload')">UPLOAD VIDEO</button>
+        <button class="tab-btn" id="btn-live" onclick="switchTab('live')">LIVE IP FEED</button>
+        <button class="tab-btn" id="btn-twin" onclick="switchTab('twin')">DIGITAL TWIN / ACC</button>
+    </div>
+
+    <!-- ==============================================================================
+       TAB 1: PRE-RECORDED VIDEO DEHAZING
+       ============================================================================== -->
+    <div class="tab-content active flex-layout" id="tab-upload">
+        <!-- Two partition layout at top -->
+        <div class="standard-layout" id="upload-top-layout">
+            <div class="panel">
+                <div class="panel-title">Video Configuration</div>
+                
+                <form id="upload-form" onsubmit="submitVideoProcess(event)">
+                    <div class="control-group" style="margin-bottom:15px;">
+                        <label>Select Video File</label>
+                        <input type="file" id="upload-file" name="video" accept="video/*" required>
+                    </div>
+                    
+                    <div class="control-group" style="margin-bottom:15px;">
+                        <label>Dehaze Model</label>
+                        <select name="model">
+                            <option value="dehazeformer-t">DehazeFormer - Tiny</option>
+                            <option value="dehazeformer-s">DehazeFormer - Small</option>
+                            <option value="dehazeformer-m">DehazeFormer - Medium</option>
+                            <option value="dehazeformer-b">DehazeFormer - Base</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group" style="margin-bottom:15px;">
+                        <label>Target Resolution (Max side)</label>
+                        <select name="resolution">
+                            <option value="1280">1280 px (High Quality)</option>
+                            <option value="640" selected>640 px (Standard)</option>
+                            <option value="320">320 px (Fast)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group" style="margin-bottom:15px; display:flex; flex-direction:row; gap:20px;">
+                        <label class="checkbox-container">
+                            <input type="checkbox" name="fp16" value="true" checked>
+                            <span>FP16 Acceleration</span>
+                        </label>
+                    </div>
+
+                    <div class="control-group" style="margin-bottom:15px;">
+                        <label>Preprocessing Mode</label>
+                        <select name="preprocess">
+                            <option value="video">Video Conditioning</option>
+                            <option value="none">None</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group" style="margin-bottom:15px;">
+                        <label>Postprocessing Mode</label>
+                        <select name="postprocess">
+                            <option value="video">Video Enhancement</option>
+                            <option value="none">None</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group" style="margin-bottom:20px;">
+                        <label class="checkbox-container">
+                            <input type="checkbox" name="comparison" value="true" checked>
+                            <span>Comparison Output</span>
+                        </label>
+                    </div>
+
+                    <button class="btn-primary" type="submit" style="width:100%;">START PROCESSING</button>
+                </form>
+            </div>
+
+            <div class="displays-panel" id="upload-displays">
+                <!-- Idle Display -->
+                <div id="upload-idle">
+                    <p style="color:var(--text-secondary); text-align:center;">Upload a hazy video file on the left panel to begin processing.</p>
+                </div>
+                
+                <!-- Progress Display with Live Preview -->
+                <div class="progress-container" id="upload-progress" style="display:none; width:100%;">
+                    <div class="progress-label" id="upload-status-text">EXTRACTING FRAMES...</div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="upload-bar"></div>
+                    </div>
+                    <div class="progress-stats" style="margin-bottom: 15px;">
+                        <div>
+                            <div style="font-weight:700;" id="upload-stat-frame">0 / 0</div>
+                            <div style="font-size:0.75rem;">Frames</div>
+                        </div>
+                        <div>
+                            <div style="font-weight:700;" id="upload-stat-fps">0.0</div>
+                            <div style="font-size:0.75rem;">FPS</div>
+                        </div>
+                        <div>
+                            <div style="font-weight:700;" id="upload-stat-eta">0.0s</div>
+                            <div style="font-size:0.75rem;">ETA</div>
+                        </div>
+                    </div>
+
+                    <!-- Live Processing Preview Container -->
+                    <div id="upload-preview-container" style="width:100%; aspect-ratio: 16/9; background:#000; border-radius:12px; overflow:hidden; border:1px solid var(--panel-border); display: none;">
+                        <img id="upload-preview-img" src="" style="width:100%; height:100%; object-fit:contain;" alt="Processing Live Preview">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Result Display at the bottom spanning full width -->
+        <div class="panel" id="upload-result" style="display:none; flex-direction:column; align-items:center; gap:20px; width:100%;">
+            <div class="panel-title" style="width:100%; text-align:center;" id="upload-result-title">Dehazed Output</div>
+            <div class="result-video-box" style="width:100%; max-width:960px; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; border:1px solid var(--panel-border);">
+                <video id="upload-video-player" controls style="width:100%; height:100%;"></video>
+            </div>
+            
+            <div class="output-actions" style="display:flex; gap:10px; margin-top:10px; justify-content:center; width:100%;">
+                <a href="" class="btn-action btn-action-primary" id="btn-download-dehazed" style="text-decoration:none;" download>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width:18px; height:18px; margin-right:5px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Download Dehazed Video
+                </a>
+                <a href="" class="btn-action" id="btn-download-comparison" style="text-decoration:none; display:none;" download>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width:18px; height:18px; margin-right:5px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Download Comparison Video
+                </a>
+                <button class="btn-secondary" onclick="resetUploadView()">Process Another Video</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==============================================================================
+       TAB 2: LIVE IP CAMERA DEHAZING
+       ============================================================================== -->
+    <div class="tab-content standard-layout" id="tab-live">
+        <div class="panel">
+            <div class="panel-title">IP Stream Config</div>
+            
+            <div class="control-group" style="margin-bottom:12px;">
+                <label>IP Stream Address / RTSP URL</label>
+                <input type="text" id="live-url" placeholder="rtsp://username:password@ip:port/h264" value="http://">
+            </div>
+            
+            <div class="control-group" style="margin-bottom:12px;">
+                <label>Dehaze Model</label>
+                <select id="live-model">
+                    <option value="dehazeformer-t">DehazeFormer - Tiny</option>
+                    <option value="dehazeformer-s">DehazeFormer - Small</option>
+                    <option value="dehazeformer-m">DehazeFormer - Medium</option>
+                    <option value="dehazeformer-b">DehazeFormer - Base</option>
+                </select>
+            </div>
+            
+            <div class="control-group" style="margin-bottom:12px;">
+                <label>Resolution</label>
+                <select id="live-resolution">
+                    <option value="640" selected>640 px (Recommended)</option>
+                    <option value="480">480 px</option>
+                    <option value="320">320 px</option>
+                </select>
+            </div>
+
+            <div class="control-group" style="margin-bottom:12px; display:flex; flex-direction:row; gap:20px;">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="live-fp16" checked>
+                    <span>FP16 Acceleration</span>
+                </label>
+            </div>
+
+            <div class="control-group" style="margin-bottom:12px;">
+                <label>Preprocessing Mode</label>
+                <select id="live-preprocess">
+                    <option value="video">Video Conditioning</option>
+                    <option value="none">None</option>
+                </select>
+            </div>
+
+            <div class="control-group" style="margin-bottom:15px;">
+                <label>Postprocessing Mode</label>
+                <select id="live-postprocess">
+                    <option value="video">Video Enhancement</option>
+                    <option value="none">None</option>
+                </select>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn-primary" onclick="startLiveFeed()" style="flex:1;">START FEED</button>
+                <button class="btn-secondary" onclick="stopLiveFeed()" style="flex:1; background:var(--accent-red);">STOP FEED</button>
+            </div>
+        </div>
+
+        <div class="displays-panel" style="justify-content: flex-start; align-items: center; width: 100%;">
+            <!-- Idle message -->
+            <div id="live-idle-msg">
+                <p style="color:var(--text-secondary); text-align:center;">IP Camera feed is idle. Configure URL on the left and click Start.</p>
+            </div>
+            
+            <!-- Live Stream Wrapper with floating Fullscreen and Recording badge -->
+            <div class="live-video-wrapper" id="live-video-wrapper" style="display: none; margin-bottom: 15px; width: 100%;">
+                <img class="live-mjpeg-stream" id="live-mjpeg" src="" alt="Live IP Camera Feed">
+                <div class="recording-badge" id="live-recording-badge" style="display: none;">
+                    <span class="pulse-dot"></span> RECORDING
+                </div>
+                <!-- Floating Fullscreen Button -->
+                <button class="live-fullscreen-btn" onclick="toggleLiveFullscreen()" title="Toggle Fullscreen">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path id="live-fs-icon-path-1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M4 16v4h4M20 8V4h-4M20 16v4h-4"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Live Feed Metrics Grid -->
+            <div class="metrics-grid" id="live-metrics" style="display: none; width: 100%;">
+                <div class="metric-box">
+                    <div class="metric-val" id="live-metric-status" style="color: var(--accent-red);">Disconnected</div>
+                    <div class="metric-lbl">Stream Connection</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-val" id="live-metric-speed">0.0 FPS</div>
+                    <div class="metric-lbl">Processing Speed</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-val" id="live-metric-latency">0 ms</div>
+                    <div class="metric-lbl">Latency (Cap-to-Web)</div>
+                </div>
+            </div>
+
+            <!-- Action buttons for Live Mode -->
+            <div class="output-actions" id="live-actions" style="display: none; width: 100%;">
+                <button class="btn-action btn-action-primary" id="btn-live-snapshot" onclick="captureLiveSnapshot()">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    Take Snapshot
+                </button>
+                
+                <button class="btn-action" id="btn-live-record" onclick="toggleLiveRecording()">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                    <span id="btn-live-record-text">Start Recording</span>
+                </button>
+
+                <button class="btn-action" id="btn-live-fullscreen" onclick="toggleLiveFullscreen()">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px;">
+                        <path id="live-fs-icon-path-2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4h4M4 16v4h4M20 8V4h-4M20 16v4h-4"></path>
+                    </svg>
+                    <span id="btn-live-fs-text">Full Screen</span>
+                </button>
+                
+                <a href="" class="btn-action btn-action-primary" id="btn-live-download" style="display: none;" download>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Download Recorded MP4
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==============================================================================
+       TAB 3: DIGITAL TWIN / ACC VEHICLE DASHBOARD
+       ============================================================================== -->
+    <div class="tab-content twin-layout" id="tab-twin">
+        <div class="panel">
+            <div class="panel-title">Dashboard Config</div>
+            
+            <div class="control-group">
+                <label for="webcam-select">WEBCAM INTERFACE</label>
+                <select id="webcam-select" onchange="updateTwinConfig()">
+                    <option value="0">Front Camera (USB Index 0)</option>
+                    <option value="1">Back Camera (USB Index 1)</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="model-select">DEHAZE MODEL WEIGHTS</label>
+                <select id="model-select" onchange="updateTwinConfig()">
+                    <option value="dehazeformer-t">DehazeFormer - Tiny (Fastest)</option>
+                    <option value="dehazeformer-s">DehazeFormer - Small (Balanced)</option>
+                    <option value="dehazeformer-m">DehazeFormer - Medium</option>
+                    <option value="dehazeformer-b">DehazeFormer - Base (Strongest)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="twin-resolution">TARGET RESOLUTION</label>
+                <select id="twin-resolution" onchange="updateTwinConfig()">
+                    <option value="640">640 px (Higher Quality)</option>
+                    <option value="480">480 px (Balanced)</option>
+                    <option value="320" selected>320 px (Fastest)</option>
+                </select>
+            </div>
+
+            <div class="control-group" style="display:flex; flex-direction:row; gap:20px;">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="twin-fp16" onchange="updateTwinConfig()">
+                    <span>FP16 Acceleration</span>
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label for="twin-preprocess">PREPROCESSING MODE</label>
+                <select id="twin-preprocess" onchange="updateTwinConfig()">
+                    <option value="video">Video Conditioning</option>
+                    <option value="none">None</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="twin-postprocess">POSTPROCESSING MODE</label>
+                <select id="twin-postprocess" onchange="updateTwinConfig()">
+                    <option value="video">Video Enhancement</option>
+                    <option value="none">None</option>
+                </select>
+            </div>
+            
+            <div class="switch-container">
+                <span class="switch-label">ADAPTIVE CRUISE CONTROL</span>
+                <label class="switch">
+                    <input type="checkbox" id="acc-toggle" onchange="updateTwinConfig()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
+            <div class="panel-title" style="margin-top: 10px;">Keyboard Control</div>
+            <div class="keyboard-grid">
+                <div></div>
+                <div class="key-btn" id="key-w">W</div>
+                <div></div>
+                <div class="key-btn" id="key-a">A</div>
+                <div class="key-btn" id="key-s">S</div>
+                <div class="key-btn" id="key-d">D</div>
+            </div>
+            <div style="display: flex; justify-content: center;">
+                <div class="key-btn space-key" id="key-space" style="width: 132px;">SPACE (BRAKE)</div>
+            </div>
+            
+            <div class="footer-help">
+                <strong>Keyboard Driving Instructions:</strong><br>
+                â€¢ Drive: <strong>W / S</strong> (or Arrow keys)<br>
+                â€¢ Steer: <strong>A / D</strong> (or Arrow keys)<br>
+                â€¢ Halt: <strong>SPACEBAR</strong> (Active brake)<br>
+                â€¢ Mode toggle: Press <strong>M</strong> on keyboard
+            </div>
+        </div>
+
+        <div class="streams-panel">
+            <div class="video-grid">
+                <div class="video-box">
+                    <h3>ORIGINAL STREAM</h3>
+                    <img src="/stream/original" alt="Original hazy stream" onerror="this.src='https://placehold.co/400x300/151717/8F9BB3?text=Stream+Offline';">
+                </div>
+                <div class="video-box">
+                    <h3>DEHAZED OUTPUT</h3>
+                    <img src="/stream/dehazed" alt="Dehazed output" onerror="this.src='https://placehold.co/400x300/151717/8F9BB3?text=Processing...';">
+                </div>
+            </div>
+            
+            <div class="twin-box">
+                <h3>DIGITAL TWIN SIMULATION</h3>
+                <img src="/stream/twin" id="twin-img" alt="Digital twin simulation" draggable="false">
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">Live Telemetry</div>
+            
+            <div class="ttc-alert" id="ttc-box">
+                COLLISION WARNING<br>
+                <span id="ttc-sec">0.0s to impact</span>
+            </div>
+            
+            <div class="tel-card">
+                <div class="tel-label">ACC SYSTEM MODE</div>
+                <div class="tel-value" id="val-acc-status" style="font-size: 1.15rem; color: var(--accent-blue);">MANUAL</div>
+            </div>
+            
+            <div class="tel-card">
+                <div class="tel-label">SPEEDOMETER</div>
+                <div class="tel-value" id="val-speed">0.00 m/s</div>
+            </div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Ego Throttle Output</span>
+                    <span id="txt-throttle">0%</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-throttle"></div>
+                </div>
+            </div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Steering Output Angle</span>
+                    <span id="txt-steering">0Â°</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-steering" style="background-color: var(--accent-yellow);"></div>
+                </div>
+            </div>
+            
+            <div class="panel-title" style="margin-top: 10px;">VL53L0X DISTANCE METERS</div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Left Sensor</span>
+                    <span id="txt-dist-l">300.0 cm</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-dist-l"></div>
+                </div>
+            </div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Center Sensor</span>
+                    <span id="txt-dist-c">300.0 cm</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-dist-c"></div>
+                </div>
+            </div>
+            
+            <div class="meter-container">
+                <div class="meter-info">
+                    <span>Right Sensor</span>
+                    <span id="txt-dist-r">300.0 cm</span>
+                </div>
+                <div class="meter-bar">
+                    <div class="meter-fill" id="bar-dist-r"></div>
+                </div>
+            </div>
+            
+            <div class="tel-card" style="margin-top: 5px;">
+                <div class="tel-label">Obstacle Relative Speed</div>
+                <div class="tel-value" id="val-vrel" style="font-size: 1.25rem;">+0.00 m/s</div>
+            </div>
+            
+            <div class="footer-help" style="margin-top: auto; display: flex; flex-direction: column; gap: 4px;">
+                <div><strong>Dehaze Performance:</strong></div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Model Rate:</span>
+                    <span id="val-fps">0.0 FPS</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Inference latency:</span>
+                    <span id="val-latency">0.0 ms</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Web Navigation / Tab Switching ---
+        let currentTab = 'upload';
+        let telemetryInterval = null;
+        let progressInterval = null;
+        let liveStatsInterval = null;
+
+        function switchTab(tabId) {
+            // Remove active classes
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active classes
+            if (tabId === 'upload') {
+                document.getElementById('btn-upload').classList.add('active');
+                document.getElementById('tab-upload').classList.add('active');
+                currentTab = 'upload';
+                stopTelemetryLoop();
+                stopLiveStatsLoop();
+            } else if (tabId === 'live') {
+                document.getElementById('btn-live').classList.add('active');
+                document.getElementById('tab-live').classList.add('active');
+                currentTab = 'live';
+                stopTelemetryLoop();
+                startLiveStatsLoop();
+            } else if (tabId === 'twin') {
+                document.getElementById('btn-twin').classList.add('active');
+                document.getElementById('tab-twin').classList.add('active');
+                currentTab = 'twin';
+                startTelemetryLoop();
+                stopLiveStatsLoop();
+                // Enable connection status badge in header
+                document.getElementById('conn-badge').style.display = "flex";
+            }
+        }
+
+        // --- TAB 1: PRE-RECORDED VIDEO DEHAZING PIPELINE ---
+        function submitVideoProcess(e) {
+            e.preventDefault();
+            const form = document.getElementById('upload-form');
+            const formData = new FormData(form);
+
+            // Update UI views
+            document.getElementById('upload-idle').style.display = "none";
+            document.getElementById('upload-result').style.display = "none";
+            document.getElementById('upload-progress').style.display = "flex";
+            
+            fetch('/process', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Start progress polling
+                    startProgressLoop();
+                } else {
+                    alert("Error: " + data.error);
+                    resetUploadView();
+                }
+            })
+            .catch(err => {
+                alert("Upload failed: " + err);
+                resetUploadView();
+            });
+        }
+
+        let previewInterval = null;
+        function startPreviewLoop() {
+            if (previewInterval) clearInterval(previewInterval);
+            previewInterval = setInterval(() => {
+                const img = document.getElementById('upload-preview-img');
+                if (img) {
+                    img.src = "/process/preview?t=" + new Date().getTime();
+                }
+            }, 200);
+        }
+
+        function stopPreviewLoop() {
+            if (previewInterval) {
+                clearInterval(previewInterval);
+                previewInterval = null;
+            }
+        }
+
+        function startProgressLoop() {
+            if (progressInterval) clearInterval(progressInterval);
+            progressInterval = setInterval(pollProgress, 500);
+        }
+
+        function stopProgressLoop() {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+        }
+
+        function pollProgress() {
+            fetch('/progress')
+            .then(res => res.json())
+            .then(data => {
+                const bar = document.getElementById('upload-bar');
+                const label = document.getElementById('upload-status-text');
+                
+                if (data.status === 'idle') {
+                    resetUploadView();
+                    stopProgressLoop();
+                } else if (data.status === 'extracting') {
+                    label.innerText = "Extracting Video Frames...";
+                    bar.style.width = "10%";
+                    document.getElementById('upload-stat-frame').innerText = data.current_frame + " / ?";
+                } else if (data.status === 'loading_model') {
+                    label.innerText = "Loading DehazeModel weights...";
+                    bar.style.width = "20%";
+                } else if (data.status === 'dehazing') {
+                    label.innerText = "Running model inference...";
+                    const pct = Math.round((data.current_frame / data.total_frames) * 70) + 20; // 20% to 90%
+                    bar.style.width = pct + "%";
+                    document.getElementById('upload-stat-frame').innerText = data.current_frame + " / " + data.total_frames;
+                    document.getElementById('upload-stat-fps').innerText = data.fps.toFixed(1);
+                    document.getElementById('upload-stat-eta').innerText = data.eta.toFixed(1) + "s";
+                    
+                    // Show preview container and start preview loop
+                    document.getElementById('upload-preview-container').style.display = "block";
+                    startPreviewLoop();
+                } else if (data.status === 'compiling') {
+                    label.innerText = "Reassembling H.264 video...";
+                    bar.style.width = "95%";
+                } else if (data.status === 'completed') {
+                    bar.style.width = "100%";
+                    label.innerText = "PROCESSING COMPLETED!";
+                    stopProgressLoop();
+                    stopPreviewLoop();
+                    
+                    // Display results
+                    setTimeout(() => {
+                        document.getElementById('upload-progress').style.display = "none";
+                        document.getElementById('upload-result').style.display = "flex";
+                        
+                        // Select comparison video if checked, else standard
+                        const videoUrl = data.comparison_video ? data.comparison_video : data.output_video;
+                        document.getElementById('upload-result-title').innerText = data.comparison_video ? "Comparison Output (Hazy vs Dehazed)" : "Dehazed Output";
+                        
+                        // Dynamically update result video box aspect ratio
+                        const resultBox = document.querySelector('.result-video-box');
+                        if (resultBox) {
+                            if (data.comparison_video) {
+                                resultBox.style.aspectRatio = "32/9";
+                                resultBox.style.maxWidth = "1200px";
+                            } else {
+                                resultBox.style.aspectRatio = "16/9";
+                                resultBox.style.maxWidth = "960px";
+                            }
+                        }
+                        
+                        const player = document.getElementById('upload-video-player');
+                        player.src = videoUrl;
+                        player.load();
+                        player.play();
+
+                        // Set download URLs
+                        document.getElementById('btn-download-dehazed').href = data.output_video;
+                        const btnComp = document.getElementById('btn-download-comparison');
+                        if (data.comparison_video) {
+                            btnComp.href = data.comparison_video;
+                            btnComp.style.display = "inline-flex";
+                        } else {
+                            btnComp.style.display = "none";
+                        }
+                    }, 500);
+                } else if (data.status === 'error') {
+                    alert("Processing Error: " + data.error);
+                    stopProgressLoop();
+                    stopPreviewLoop();
+                    resetUploadView();
+                }
+            });
+        }
+
+        function resetUploadView() {
+            stopPreviewLoop();
+            document.getElementById('upload-progress').style.display = "none";
+            document.getElementById('upload-preview-container').style.display = "none";
+            document.getElementById('upload-result').style.display = "none";
+            document.getElementById('upload-idle').style.display = "block";
+            document.getElementById('upload-file').value = "";
+        }
+
+        // --- TAB 2: LIVE IP STREAM FEED ---
+        let isRecording = false;
+
+        function startLiveFeed() {
+            const url = document.getElementById('live-url').value;
+            const model = document.getElementById('live-model').value;
+            const resolution = document.getElementById('live-resolution').value;
+            const fp16 = document.getElementById('live-fp16').checked;
+            const preprocess = document.getElementById('live-preprocess').value;
+            const postprocess = document.getElementById('live-postprocess').value;
+
+            const formData = new FormData();
+            formData.append('url', url);
+            formData.append('model', model);
+            formData.append('resolution', resolution);
+            formData.append('fp16', fp16);
+            formData.append('preprocess', preprocess);
+            formData.append('postprocess', postprocess);
+
+            fetch('/live/start', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('live-idle-msg').style.display = "none";
+                    document.getElementById('live-video-wrapper').style.display = "flex";
+                    document.getElementById('live-metrics').style.display = "grid";
+                    document.getElementById('live-actions').style.display = "flex";
+                    
+                    document.getElementById('live-mjpeg').src = "/live/stream?t=" + new Date().getTime();
+                    startLiveStatsLoop();
+                } else {
+                    alert("Failed to start live camera: " + data.error);
+                }
+            });
+        }
+
+        function stopLiveFeed() {
+            fetch('/live/stop', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('live-mjpeg').src = "";
+                document.getElementById('live-video-wrapper').style.display = "none";
+                document.getElementById('live-metrics').style.display = "none";
+                document.getElementById('live-actions').style.display = "none";
+                document.getElementById('live-idle-msg').style.display = "block";
+                stopLiveStatsLoop();
+                
+                // Reset recording button states
+                isRecording = false;
+                document.getElementById('btn-live-record-text').innerText = "Start Recording";
+                document.getElementById('btn-live-record').classList.remove('btn-action-recording');
+                document.getElementById('live-recording-badge').style.display = "none";
+                document.getElementById('btn-live-download').style.display = "none";
+            });
+        }
+
+        function startLiveStatsLoop() {
+            if (liveStatsInterval) clearInterval(liveStatsInterval);
+            liveStatsInterval = setInterval(pollLiveStats, 500);
+        }
+
+        function stopLiveStatsLoop() {
+            if (liveStatsInterval) {
+                clearInterval(liveStatsInterval);
+                liveStatsInterval = null;
+            }
+        }
+
+        function pollLiveStats() {
+            fetch('/live/stats')
+            .then(res => res.json())
+            .then(data => {
+                if (data.active) {
+                    const statusEl = document.getElementById('live-metric-status');
+                    if (data.connected) {
+                        statusEl.innerText = "Connected";
+                        statusEl.style.color = "var(--accent-green)";
+                    } else {
+                        statusEl.innerText = "Connecting...";
+                        statusEl.style.color = "var(--accent-yellow)";
+                    }
+                    document.getElementById('live-metric-speed').innerText = data.fps.toFixed(1) + " FPS";
+                    document.getElementById('live-metric-latency').innerText = data.latency.toFixed(1) + " ms";
+                    
+                    // Update recording status badge
+                    const badge = document.getElementById('live-recording-badge');
+                    if (data.is_recording) {
+                        badge.style.display = "flex";
+                        isRecording = true;
+                        document.getElementById('btn-live-record-text').innerText = "Stop Recording";
+                        document.getElementById('btn-live-record').classList.add('btn-action-recording');
+                    } else {
+                        badge.style.display = "none";
+                        isRecording = false;
+                        document.getElementById('btn-live-record-text').innerText = "Start Recording";
+                        document.getElementById('btn-live-record').classList.remove('btn-action-recording');
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Error polling live stats:", err);
+            });
+        }
+
+        function toggleLiveRecording() {
+            if (!isRecording) {
+                fetch('/live/record/start', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        isRecording = true;
+                        document.getElementById('btn-live-record-text').innerText = "Stop Recording";
+                        document.getElementById('btn-live-record').classList.add('btn-action-recording');
+                        document.getElementById('live-recording-badge').style.display = "flex";
+                        document.getElementById('btn-live-download').style.display = "none";
+                    } else {
+                        alert("Recording error: " + data.message);
+                    }
+                });
+            } else {
+                fetch('/live/record/stop', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        isRecording = false;
+                        document.getElementById('btn-live-record-text').innerText = "Start Recording";
+                        document.getElementById('btn-live-record').classList.remove('btn-action-recording');
+                        document.getElementById('live-recording-badge').style.display = "none";
+                        
+                        const downloadBtn = document.getElementById('btn-live-download');
+                        downloadBtn.href = data.video_url;
+                        downloadBtn.style.display = "inline-flex";
+                        alert("Recording saved successfully! Click the download button to save.");
+                    } else {
+                        alert("Recording error: " + data.error);
+                    }
+                });
+            }
+        }
+
+        function toggleLiveFullscreen() {
+            const wrapper = document.getElementById('live-video-wrapper');
+            const path1 = document.getElementById('live-fs-icon-path-1');
+            const path2 = document.getElementById('live-fs-icon-path-2');
+            const label = document.getElementById('btn-live-fs-text');
+            
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (wrapper.requestFullscreen) {
+                    wrapper.requestFullscreen();
+                } else if (wrapper.webkitRequestFullscreen) {
+                    wrapper.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        }
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        
+        function handleFullscreenChange() {
+            const path1 = document.getElementById('live-fs-icon-path-1');
+            const path2 = document.getElementById('live-fs-icon-path-2');
+            const label = document.getElementById('btn-live-fs-text');
+            
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                const exitPath = "M4 4h5v5H4V4zm11 0h5v5h-5V4zM4 15h5v5H4v-5zm11 0h5v5h-5v-5z";
+                if (path1) path1.setAttribute('d', exitPath);
+                if (path2) path2.setAttribute('d', exitPath);
+                if (label) label.innerText = "Exit Fullscreen";
+            } else {
+                const enterPath = "M4 8V4h4M4 16v4h4M20 8V4h-4M20 16v4h-4";
+                if (path1) path1.setAttribute('d', enterPath);
+                if (path2) path2.setAttribute('d', enterPath);
+                if (label) label.innerText = "Full Screen";
+            }
+        }
+
+        function captureLiveSnapshot() {
+            window.open('/live/snapshot', '_blank');
+        }
+
+        // --- TAB 3: DIGITAL TWIN / ACC SYSTEMS ---
+        let keyState = { w: false, s: false, a: false, d: false, space: false };
+        let keyMap = {
+            'w': 'w', 'ArrowUp': 'w',
+            's': 's', 'ArrowDown': 's',
+            'a': 'a', 'ArrowLeft': 'a',
+            'd': 'd', 'ArrowRight': 'd',
+            ' ': 'space'
+        };
+        let controlChanged = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (currentTab !== 'twin') return;
+            
+            if (e.key === 'm' || e.key === 'M') {
+                const toggle = document.getElementById('acc-toggle');
+                toggle.checked = !toggle.checked;
+                updateTwinConfig();
+                return;
+            }
+            
+            const keyMapped = keyMap[e.key];
+            if (keyMapped) {
+                e.preventDefault();
+                if (!keyState[keyMapped]) {
+                    keyState[keyMapped] = true;
+                    document.getElementById('key-' + keyMapped).classList.add('active');
+                    controlChanged = true;
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            if (currentTab !== 'twin') return;
+            const keyMapped = keyMap[e.key];
+            if (keyMapped) {
+                if (keyState[keyMapped]) {
+                    keyState[keyMapped] = false;
+                    document.getElementById('key-' + keyMapped).classList.remove('active');
+                    controlChanged = true;
+                }
+            }
+        });
+
+        setInterval(() => {
+            if (controlChanged && currentTab === 'twin') {
+                sendControlState();
+                controlChanged = false;
+            }
+        }, 50);
+
+        function sendControlState() {
+            fetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(keyState)
+            });
+        }
+
+        function updateTwinConfig() {
+            const model = document.getElementById('model-select').value;
+            const camera = document.getElementById('webcam-select').value;
+            const acc_enabled = document.getElementById('acc-toggle').checked;
+            const resolution = document.getElementById('twin-resolution').value;
+            const fp16 = document.getElementById('twin-fp16').checked;
+            const preprocess = document.getElementById('twin-preprocess').value;
+            const postprocess = document.getElementById('twin-postprocess').value;
+
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model,
+                    camera: camera,
+                    acc_enabled: acc_enabled,
+                    resolution: parseInt(resolution),
+                    fp16: fp16,
+                    preprocess: preprocess,
+                    postprocess: postprocess
+                })
+            });
+        }
+
+        // Mouse Drag Twin Obstacles
+        const twinImg = document.getElementById('twin-img');
+        
+        twinImg.addEventListener('mousedown', (e) => {
+            sendMouse(e, true);
+        });
+        
+        twinImg.addEventListener('mousemove', (e) => {
+            if (e.buttons === 1) {
+                sendMouse(e, true);
+            }
+        });
+        
+        window.addEventListener('mouseup', (e) => {
+            if (currentTab !== 'twin') return;
+            fetch('/api/mouse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: 0, y: 0, is_pressed: false })
+            });
+        });
+
+        function sendMouse(e, isPressed) {
+            if (currentTab !== 'twin') return;
+            const rect = twinImg.getBoundingClientRect();
+            const scaleX = 580.0 / rect.width;
+            const scaleY = 480.0 / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            fetch('/api/mouse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: x, y: y, is_pressed: isPressed })
+            });
+        }
+
+        function startTelemetryLoop() {
+            if (telemetryInterval) clearInterval(telemetryInterval);
+            telemetryInterval = setInterval(pollTelemetry, 100);
+        }
+
+        function stopTelemetryLoop() {
+            if (telemetryInterval) {
+                clearInterval(telemetryInterval);
+                telemetryInterval = null;
+            }
+            document.getElementById('conn-badge').style.display = "none";
+        }
+
+        // Cache previous telemetry values to avoid unnecessary DOM updates (prevents flicker)
+        let prevTelemetry = {};
+
+        function pollTelemetry() {
+            fetch('/api/telemetry')
+            .then(res => res.json())
+            .then(data => {
+                const badge = document.getElementById('conn-badge');
+                if (prevTelemetry.connected !== data.connected) {
+                    if (data.connected) {
+                        badge.className = "status-badge connected";
+                        badge.innerText = "CONNECTED";
+                    } else {
+                        badge.className = "status-badge disconnected";
+                        badge.innerText = "DISCONNECTED";
+                    }
+                }
+                
+                if (prevTelemetry.acc_enabled !== data.acc_enabled) {
+                    document.getElementById('acc-toggle').checked = data.acc_enabled;
+                }
+                
+                if (prevTelemetry.acc_status !== data.acc_status) {
+                    document.getElementById('val-acc-status').innerText = data.acc_status;
+                    
+                    let statusColor = 'var(--accent-blue)';
+                    if (data.acc_status.includes("OVERRIDE") || data.acc_status.includes("CRITICAL")) {
+                        statusColor = 'var(--accent-red)';
+                    } else if (data.acc_status.includes("ACTIVE")) {
+                        statusColor = 'var(--accent-green)';
+                    } else if (data.acc_status.includes("MANUAL")) {
+                        statusColor = 'var(--accent-yellow)';
+                    }
+                    document.getElementById('val-acc-status').style.color = statusColor;
+                }
+
+                if (prevTelemetry.speed !== data.speed) {
+                    document.getElementById('val-speed').innerText = data.speed.toFixed(2) + " m/s";
+                }
+                
+                if (prevTelemetry.throttle !== data.throttle) {
+                    const absThrottle = Math.abs(data.throttle);
+                    const pctThrottle = (absThrottle / 200.0) * 100;
+                    document.getElementById('txt-throttle').innerText = (data.throttle >= 0 ? "+" : "-") + Math.round(pctThrottle) + "%";
+                    document.getElementById('bar-throttle').style.width = pctThrottle + "%";
+                }
+                
+                if (prevTelemetry.steering !== data.steering) {
+                    const steerVal = data.steering + 45;
+                    const pctSteer = (steerVal / 90.0) * 100;
+                    document.getElementById('txt-steering').innerText = (data.steering >= 0 ? "+" : "") + data.steering + "°";
+                    document.getElementById('bar-steering').style.width = pctSteer + "%";
+                }
+
+                const sensors = [
+                    { key: 'dist_l', val: data.dist_l, txt: 'txt-dist-l', bar: 'bar-dist-l' },
+                    { key: 'dist_c', val: data.dist_c, txt: 'txt-dist-c', bar: 'bar-dist-c' },
+                    { key: 'dist_r', val: data.dist_r, txt: 'txt-dist-r', bar: 'bar-dist-r' }
+                ];
+                
+                sensors.forEach(s => {
+                    if (prevTelemetry[s.key] !== s.val) {
+                        document.getElementById(s.txt).innerText = s.val.toFixed(1) + " cm";
+                        const pctDist = (s.val / 300.0) * 100;
+                        const fillBar = document.getElementById(s.bar);
+                        fillBar.style.width = pctDist + "%";
+                        
+                        if (s.val < 25.0) {
+                            fillBar.style.backgroundColor = "var(--accent-red)";
+                        } else if (s.val < 50.0) {
+                            fillBar.style.backgroundColor = "var(--accent-yellow)";
+                        } else {
+                            fillBar.style.backgroundColor = "var(--accent-green)";
+                        }
+                    }
+                });
+
+                if (prevTelemetry.v_rel !== data.v_rel) {
+                    let vrelText = data.v_rel.toFixed(2) + " m/s";
+                    if (data.v_rel < -0.05) {
+                        document.getElementById('val-vrel').style.color = "var(--accent-red)";
+                        vrelText = "APPROACHING: " + vrelText;
+                    } else if (data.v_rel > 0.05) {
+                        document.getElementById('val-vrel').style.color = "var(--accent-green)";
+                        vrelText = "RECEDING: " + vrelText;
+                    } else {
+                        document.getElementById('val-vrel').style.color = "var(--text-primary)";
+                    }
+                    document.getElementById('val-vrel').innerText = vrelText;
+                }
+
+                const ttcBox = document.getElementById('ttc-box');
+                if (data.ttc !== null) {
+                    ttcBox.classList.add('visible');
+                    document.getElementById('ttc-sec').innerText = data.ttc.toFixed(2) + "s to impact";
+                } else {
+                    ttcBox.classList.remove('visible');
+                }
+
+                if (prevTelemetry.dehaze_fps !== data.dehaze_fps) {
+                    document.getElementById('val-fps').innerText = data.dehaze_fps.toFixed(1) + " FPS";
+                }
+                if (prevTelemetry.dehaze_latency !== data.dehaze_latency) {
+                    document.getElementById('val-latency').innerText = data.dehaze_latency.toFixed(1) + " ms";
+                }
+
+                // Cache the current telemetry for next comparison
+                prevTelemetry = data;
+            })
+            .catch(err => {
+                console.warn("Telemetry connection issue:", err);
+            });
+        }
+    </script>
+</body>
+</html>
+
