@@ -110,6 +110,7 @@ def get_sensor_distances():
 
 # --- HTTP Endpoints ---
 @app.route('/sensors', methods=['GET'])
+@app.route('/sensor', methods=['GET'])
 def get_sensors():
     readings, _ = get_sensor_distances()
     return jsonify({

@@ -46,6 +46,11 @@ Adafruit_VL53L0X sensorL  = Adafruit_VL53L0X();
 Adafruit_VL53L0X sensorC  = Adafruit_VL53L0X();
 Adafruit_VL53L0X sensorR  = Adafruit_VL53L0X();
 
+// Sensor Initialization Status
+bool sensorL_ok = false;
+bool sensorC_ok = false;
+bool sensorR_ok = false;
+
 // Vehicle Telemetry Variables
 float currentSpeed = 0.0; // calculated or mocked speed (m/s)
 
@@ -78,9 +83,9 @@ void setup() {
   Wire.begin(); // Join I2C Bus as Master
 
   // Initialize sensors one by one
-  initSensor(SENSOR_L_SHUT, sensorL, ADDR_L, "Left (L)");
-  initSensor(SENSOR_C_SHUT, sensorC, ADDR_C, "Center (C)");
-  initSensor(SENSOR_R_SHUT, sensorR, ADDR_R, "Right (R)");
+  sensorL_ok = initSensor(SENSOR_L_SHUT, sensorL, ADDR_L, "Left (L)");
+  sensorC_ok = initSensor(SENSOR_C_SHUT, sensorC, ADDR_C, "Center (C)");
+  sensorR_ok = initSensor(SENSOR_R_SHUT, sensorR, ADDR_R, "Right (R)");
 
   // 3. Initialize WiFi Access Point
   Serial.println("\nStarting Access Point...");
@@ -95,7 +100,7 @@ void setup() {
   Serial.println(localPort);
 }
 
-void initSensor(int shutPin, Adafruit_VL53L0X &sensor, int address, const char* name) {
+bool initSensor(int shutPin, Adafruit_VL53L0X &sensor, int address, const char* name) {
   // Bring the specific sensor out of shutdown state
   digitalWrite(shutPin, HIGH);
   delay(10);
@@ -109,8 +114,9 @@ void initSensor(int shutPin, Adafruit_VL53L0X &sensor, int address, const char* 
   if (!sensor.begin(address, false, &Wire)) {
     Serial.print("Failed to initialize ");
     Serial.println(name);
-    // Continue anyway to prevent entire car boot failure if one sensor is disconnected
+    return false;
   }
+  return true;
 }
 
 void loop() {
@@ -144,9 +150,9 @@ void loop() {
   }
 
   // 2. Read sensor distance ranges (in cm, convert from mm)
-  float dist_l = getDistance(sensorL);
-  float dist_c = getDistance(sensorC);
-  float dist_r = getDistance(sensorR);
+  float dist_l = getDistance(sensorL, sensorL_ok);
+  float dist_c = getDistance(sensorC, sensorC_ok);
+  float dist_r = getDistance(sensorR, sensorR_ok);
 
   // 3. Send Telemetry back to Laptop via UDP
   Udp.beginPacket(remoteIP, remotePort);
@@ -161,15 +167,22 @@ void loop() {
   delay(20); // main control loop cycle delay
 }
 
-float getDistance(Adafruit_VL53L0X &sensor) {
+float getDistance(Adafruit_VL53L0X &sensor, bool sensor_ok) {
+  if (!sensor_ok) {
+    return 300.0; // default to maximum sensor range if sensor not working
+  }
   VL53L0X_RangingMeasurementData_t measure;
   sensor.rangingTest(&measure, false);
   
-  // Phase status 4 indicates valid measurement
-  if (measure.RangeStatus != 4) {
-    return (float)measure.RangeMilliMeter / 10.0; // convert mm to cm
+  // RangeStatus == 0 is success/valid measurement
+  if (measure.RangeStatus == 0) {
+    float dist = (float)measure.RangeMilliMeter / 10.0; // convert mm to cm
+    if (dist <= 2.0) { // filter out zero or extremely low readings that indicate errors
+      return 300.0;
+    }
+    return dist;
   } else {
-    return 300.0; // default to maximum sensor range if invalid reading / out of range
+    return 300.0; // default to maximum sensor range if invalid reading
   }
 }
 
