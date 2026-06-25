@@ -196,6 +196,8 @@ class LiveStreamManager:
             network = eval(self.model_name.replace('-', '_'))()
             network.load_state_dict(load_state_dict(model_path, device))
             network.to(device)
+            if self.fp16 and device.type == 'cuda':
+                network.half()
             network.eval()
             from adas_pipeline import ADASPipelineRunner
             adas_pipeline = ADASPipelineRunner(device=device)

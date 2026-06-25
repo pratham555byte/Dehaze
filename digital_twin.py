@@ -42,6 +42,8 @@ class DigitalTwin:
         If connected, uses real sensor ranges.
         If disconnected, runs offline simulation.
         """
+        self.connected = connected
+        self.real_speed = real_speed
         if connected:
             self.speed = real_speed
             self.steering_angle = math.radians(steering_deg)
@@ -229,8 +231,8 @@ class DigitalTwin:
         self.surface.blit(speed_txt, (20, 20))
         
         # HUD: mode display
-        mode_str = "CONNECTED TELEMETRY" if self.speed == real_speed else "ACC SIMULATING"
-        mode_color = (59, 130, 246) if self.speed == real_speed else (245, 158, 11)
+        mode_str = "CONNECTED TELEMETRY" if getattr(self, 'connected', False) else "ACC SIMULATING"
+        mode_color = (59, 130, 246) if getattr(self, 'connected', False) else (245, 158, 11)
         mode_txt = font_hud.render(f"MODE: {mode_str}", True, mode_color)
         self.surface.blit(mode_txt, (20, 40))
         
