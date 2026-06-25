@@ -19,15 +19,8 @@ steering = 0.0   # steering angle in degrees
 throttle_cmd = 0.0
 steering_cmd = 0.0
 
-# Obstacles positioned along the highway (y, lane_x, radius)
-# Generate a series of obstacles up to 5000 meters
+# Obstacles list is cleared for free vehicle movement
 obstacles = []
-for i in range(1, 100):
-    # Alternating lanes: left (-0.8m), center (0m), right (0.8m)
-    lane = (i % 3) - 1
-    obs_x = lane * 0.8
-    obs_y = i * 40.0 # every 40 meters
-    obstacles.append({"x": obs_x, "y": obs_y, "r": 0.4})
 
 last_update = time.perf_counter()
 state_lock = threading.Lock()

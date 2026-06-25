@@ -79,9 +79,13 @@ class ESP32Communication:
                     parts = msg.split(",")
                     if len(parts) >= 5:
                         with self.lock:
-                            self.dist_l = float(parts[1])
-                            self.dist_c = float(parts[2])
-                            self.dist_r = float(parts[3])
+                            raw_l = float(parts[1])
+                            raw_c = float(parts[2])
+                            raw_r = float(parts[3])
+                            # Filter invalid/zero readings (e.g. disconnected sensor returning <= 2.0 cm)
+                            self.dist_l = raw_l if raw_l > 2.0 else 300.0
+                            self.dist_c = raw_c if raw_c > 2.0 else 300.0
+                            self.dist_r = raw_r if raw_r > 2.0 else 300.0
                             self.vehicle_speed = float(parts[4])
                             self.last_packet_time = time.time()
                             self.connected = True
@@ -100,10 +104,10 @@ class ESP32Communication:
     def _receive_loop_http(self):
         while self.running:
             # 1. Poll Sensors
-            if "10.248.116.230" in self.esp32_ip:
-                url = f"http://{self.esp32_ip}/sensor"
-            else:
+            if "127.0.0.1" in self.esp32_ip or "localhost" in self.esp32_ip:
                 url = f"http://{self.esp32_ip}/sensors"
+            else:
+                url = f"http://{self.esp32_ip}/sensor"
             try:
                 resp = requests.get(url, timeout=0.5)
                 if resp.status_code == 200:
@@ -113,9 +117,10 @@ class ESP32Communication:
                         c_val = float(data.get("center", 8000.0))
                         r_val = float(data.get("right", 8000.0))
                         
-                        if l_val <= 0: l_val = 8000.0
-                        if c_val <= 0: c_val = 8000.0
-                        if r_val <= 0: r_val = 8000.0
+                        # Filter invalid/zero readings (e.g. disconnected sensor returning <= 20.0 mm / 2 cm)
+                        if l_val <= 20.0: l_val = 8000.0
+                        if c_val <= 20.0: c_val = 8000.0
+                        if r_val <= 20.0: r_val = 8000.0
                         
                         # Convert mm from ESP32 to cm for simulator compatibility
                         self.dist_l = l_val / 10.0

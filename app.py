@@ -261,11 +261,10 @@ class LiveStreamManager:
                 is_live_flag = False
                 speed_kmh = 60.0
                 
-                is_proto_ip = (esp32_comm.esp32_ip == "10.248.116.230")
-                is_proto_url = (self.grabber and self.grabber.stream_url and "10.248.116.230" in self.grabber.stream_url)
-                if is_proto_ip or is_proto_url:
+                is_local = "127.0.0.1" in esp32_comm.esp32_ip or "localhost" in esp32_comm.esp32_ip
+                if not is_local:
                     try:
-                        resp = requests.get("http://10.248.116.230/sensor", timeout=0.08)
+                        resp = requests.get(f"http://{esp32_comm.esp32_ip}/sensor", timeout=0.08)
                         if resp.status_code == 200:
                             sensor_data = resp.json()
                             l_val = float(sensor_data.get("left", 8000.0))
@@ -756,7 +755,7 @@ def twin_processing_loop():
         acc_status_text = status_text
         esp32_comm.send_control(final_throttle, cur_steer)
         
-        sim_readings = twin_sim.update(final_throttle, cur_steer, connected, real_speed, dt, l_dist, c_dist, r_dist)
+        sim_readings = twin_sim.update(final_throttle, cur_steer, connected, real_speed, dt, l_dist, c_dist, r_dist, space_pressed=space)
         
         if not connected:
             esp32_comm.update_simulated_telemetry(
@@ -768,7 +767,7 @@ def twin_processing_loop():
         dehaze_mod.update_vehicle_state(
             speed=real_speed if connected else float(abs(twin_sim.speed)),
             distances=[l_dist, c_dist, r_dist] if connected else [sim_readings[0], sim_readings[1], sim_readings[2]],
-            is_live=connected
+            is_live=True
         )
         
         # Feed ADAS safety state into digital twin for HUD display

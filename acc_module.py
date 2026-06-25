@@ -34,16 +34,16 @@ class AdaptiveCruiseControl:
 
         if not acc_enabled:
             # Manual Mode Override
-            if is_critical:
+            if target_throttle < 0:
+                final_throttle = target_throttle
+                acc_status_text = "MANUAL (REVERSING)"
+            elif center_dist < self.critical_distance:
+                # Brakes applied automatically ONLY when obstacle is directly in front
                 final_throttle = 0
-                acc_status_text = f"OVERRIDE: EMERGENCY BRAKE ({min_dist:.0f}cm)"
+                acc_status_text = f"OVERRIDE: EMERGENCY BRAKE ({center_dist:.0f}cm)"
             elif is_approaching and center_dist < self.critical_distance * 2.0:
                 final_throttle = 0
                 acc_status_text = f"OVERRIDE: APPROACHING ENTITY ({center_dist:.0f}cm)"
-            elif is_warning and target_throttle > 0:
-                # Reduce speed but don't fully stop
-                final_throttle = max(0, min(target_throttle, 40))
-                acc_status_text = f"CAUTION: NEARBY ENTITY ({min_dist:.0f}cm)"
             else:
                 final_throttle = target_throttle
                 acc_status_text = "MANUAL"
