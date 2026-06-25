@@ -4,7 +4,7 @@ import time
 import requests
 
 class ESP32Communication:
-    def __init__(self, esp32_ip="192.168.4.1", esp32_port=5005, local_port=5006, mode="udp"):
+    def __init__(self, esp32_ip="10.248.116.230", esp32_port=5005, local_port=5006, mode="http"):
         self.esp32_ip = esp32_ip
         self.esp32_port = esp32_port
         self.local_port = local_port
@@ -100,16 +100,27 @@ class ESP32Communication:
     def _receive_loop_http(self):
         while self.running:
             # 1. Poll Sensors
-            url = f"http://{self.esp32_ip}/sensors"
+            if "10.248.116.230" in self.esp32_ip:
+                url = f"http://{self.esp32_ip}/sensor"
+            else:
+                url = f"http://{self.esp32_ip}/sensors"
             try:
-                resp = requests.get(url, timeout=0.1)
+                resp = requests.get(url, timeout=0.5)
                 if resp.status_code == 200:
                     data = resp.json()
                     with self.lock:
+                        l_val = float(data.get("left", 8000.0))
+                        c_val = float(data.get("center", 8000.0))
+                        r_val = float(data.get("right", 8000.0))
+                        
+                        if l_val <= 0: l_val = 8000.0
+                        if c_val <= 0: c_val = 8000.0
+                        if r_val <= 0: r_val = 8000.0
+                        
                         # Convert mm from ESP32 to cm for simulator compatibility
-                        self.dist_l = float(data.get("left", 8000.0)) / 10.0
-                        self.dist_c = float(data.get("center", 8000.0)) / 10.0
-                        self.dist_r = float(data.get("right", 8000.0)) / 10.0
+                        self.dist_l = l_val / 10.0
+                        self.dist_c = c_val / 10.0
+                        self.dist_r = r_val / 10.0
                         # Speed estimation based on throttle
                         self.vehicle_speed = float(abs(self.http_throttle)) / 10.0
                         self.last_packet_time = time.time()
@@ -127,8 +138,10 @@ class ESP32Communication:
             if control_updated:
                 url_motor = f"http://{self.esp32_ip}/motor"
                 try:
-                    # Payload: {"speed": speed, "turn": turn} (Range: -100 to 100)
-                    requests.post(url_motor, json={"speed": int(throttle), "turn": int(steering)}, timeout=0.1)
+                    # Clamp payload: {"speed": speed, "turn": turn} (Range: -100 to 100)
+                    speed_val = max(-100, min(100, int(throttle)))
+                    turn_val = max(-100, min(100, int(steering)))
+                    requests.post(url_motor, json={"speed": speed_val, "turn": turn_val}, timeout=0.5)
                     with self.lock:
                         self.http_control_updated = False
                 except Exception:

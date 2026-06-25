@@ -55,8 +55,8 @@ def compute_risk(
     }
     """
 
-    # If vehicle speed is near zero, the risk is zero.
-    if actual_speed < 3.0:
+    # If vehicle speed is near zero/slow (≤ 5.0 km/h), the risk is zero (SYSTEM_RULES.md §5.4)
+    if actual_speed < 5.0:
         return {
             "risk_score":        0.0,
             "risk_level":        "LOW",

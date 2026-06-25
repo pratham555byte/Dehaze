@@ -86,6 +86,14 @@ class ADASPipelineRunner:
         self.ttc = -1.0
         self.fps = 0.0
 
+        # Emergency brake flag — read by the twin_processing_loop to force-stop
+        self.emergency_brake = False
+        self.emergency_brake_reason = ""
+
+        # Dynamic safe speed (computed from fog density per SYSTEM_RULES.md)
+        self.max_safe_speed_kmh = 100.0
+        self.is_overspeeding = False
+
     def set_distance_mode(self, mode):
         if mode in ["midas", "pinhole"]:
             self.distance_mode = mode
@@ -136,7 +144,7 @@ class ADASPipelineRunner:
                     self.traffic_light_status = color
 
         # 5. Distance Estimation
-        if self.distance_mode == "midas" and len(detections) > 0:
+        if self.distance_mode == "midas" and len(detections) > 0 and lidar_distances is None:
             # Lazy load MiDaSSmall model
             if self.midas_model is None:
                 print("[ADASPipelineRunner] Loading MiDaS Small model...")
@@ -278,13 +286,25 @@ class ADASPipelineRunner:
         if self.relative_velocity < -0.05:  # obstacle approaching
             self.ttc = current_center_dist / abs(self.relative_velocity)
 
-        # 9. Risk & Alert state machine
-        # Use risk_score.py engine
-        # Calculate fog score. We will map current_density from 0.0-1.0 to 0-100
-        # If we have a fog density value from DehazeModule, use it. Let's assume we map 0.0-1.0 from ResNet-18 estimator
-        resnet_density = getattr(self, "_latest_fog_density_resnet", 0.0) # range 0.0 - 1.0
+        # 9. Dynamic Safe Speed from fog density (SYSTEM_RULES.md §2)
+        resnet_density = getattr(self, "_latest_fog_density_resnet", 0.0)  # range 0.0 - 1.0
         fog_score_100 = resnet_density * 100.0
-        
+
+        # Fog-based dynamic speed limits (SYSTEM_RULES.md table)
+        if fog_score_100 >= 80.0:
+            self.max_safe_speed_kmh = 30.0
+        elif fog_score_100 >= 60.0:
+            self.max_safe_speed_kmh = 45.0 if not is_live else 50.0
+        elif fog_score_100 >= 40.0:
+            self.max_safe_speed_kmh = 60.0 if not is_live else 70.0
+        elif fog_score_100 >= 20.0:
+            self.max_safe_speed_kmh = 80.0 if not is_live else 100.0
+        else:
+            self.max_safe_speed_kmh = 100.0
+
+        self.is_overspeeding = (current_speed_kmh > self.max_safe_speed_kmh)
+
+        # 10. Risk & Alert state machine
         risk_result = compute_risk(
             fog_density=fog_score_100,
             distance_to_nearest=nearest_distance,
@@ -292,20 +312,59 @@ class ADASPipelineRunner:
             road_context=self.road_context,
             is_live=is_live
         )
-        
+
         self.current_risk_score = risk_result["risk_score"]
         self.current_risk_level = risk_result["risk_level"]
         self.override_reason = risk_result["override_reason"]
-        
+
         # Confidence Gating & Alert Hysteresis
-        # (Pass risk parameters to stabilize alerts)
         stabilized_alert = self.alert_hysteresis.update(self.current_risk_level)
         self.current_threat_label = stabilized_alert
 
-        # Automated emergency speech check
-        crit_limit = 0.25 if is_live else 8.0
-        if nearest_distance < crit_limit:
-            speak_alert("automated_braking", "Collision warning! Stop immediately.")
+        # 11. Proximity & TTC-based Emergency Braking (SYSTEM_RULES.md §5)
+        # Suppress all alerts when vehicle speed ≤ 5.0 km/h (parked/slow)
+        self.emergency_brake = False
+        self.emergency_brake_reason = ""
+
+        if current_speed_kmh > 5.0:
+            # --- Proximity thresholds (SYSTEM_RULES.md §5.2) ---
+            crit_dist = 0.3 if is_live else 10.0
+            warn_dist = 0.6 if is_live else 20.0
+            caution_dist = 1.0 if is_live else 30.0
+
+            # Check ALL three sensor zones for proximity threats
+            min_sensor_dist = min(esp32_sensors_m["left"], esp32_sensors_m["middle"], esp32_sensors_m["right"])
+
+            if nearest_distance < crit_dist or min_sensor_dist < crit_dist:
+                self.emergency_brake = True
+                self.emergency_brake_reason = f"CRITICAL PROXIMITY: {min(nearest_distance, min_sensor_dist):.2f}m"
+                speak_alert("automated_braking", "Collision warning! Applying emergency brakes.")
+            elif nearest_distance < warn_dist or min_sensor_dist < warn_dist:
+                speak_alert("proximity_warning", f"Warning: obstacle at {min(nearest_distance, min_sensor_dist):.1f} meters.")
+
+            # --- TTC thresholds (SYSTEM_RULES.md §5.1) ---
+            ttc_critical = 0.8 if is_live else 2.0
+            ttc_warning = 1.5 if is_live else 5.0
+
+            if 0 < self.ttc < ttc_critical:
+                self.emergency_brake = True
+                self.emergency_brake_reason = f"TTC CRITICAL: {self.ttc:.1f}s to impact"
+                speak_alert("ttc_critical", f"Time to collision: {self.ttc:.1f} seconds! Braking!")
+            elif 0 < self.ttc < ttc_warning:
+                speak_alert("ttc_warning", f"Caution: time to collision {self.ttc:.1f} seconds.")
+
+            # --- Automated Emergency Braking for middle sensor (SYSTEM_RULES.md §5.3) ---
+            if is_live and esp32_sensors_m["middle"] < 0.25:
+                self.emergency_brake = True
+                self.emergency_brake_reason = "AEB: Middle sensor < 0.25m"
+                speak_alert("automated_braking", "Collision imminent! Emergency stop!")
+
+            # --- Overspeeding alert ---
+            if self.is_overspeeding:
+                speak_alert("overspeeding", f"Reduce speed. Max safe speed is {self.max_safe_speed_kmh:.0f} km/h.")
+        else:
+            # Parked/slow — no alerts needed (SYSTEM_RULES.md §5.4)
+            pass
 
         # 10. Cognitive local Ollama LLM Reasoning
         # Query Ollama on a time-gated interval (5s normal, 1.5s under CRITICAL warnings)

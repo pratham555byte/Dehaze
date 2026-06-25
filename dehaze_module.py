@@ -48,7 +48,7 @@ class DehazeModule:
         # Adaptive Dehazing state
         self.adaptive_mode = True
         self.manual_override = False
-        self.threshold = 0.20
+        self.threshold = 0.35  # Dehazing activation gate (SYSTEM_RULES.md: 35%)
         self.current_density = 0.0
         self.dehazing_active = False
         self.last_density_check = 0.0
@@ -308,7 +308,7 @@ class DehazeModule:
                 manual = self.manual_override
                 thresh = self.threshold
                 
-            if self.fog_estimator is not None and (now_time - self.last_density_check >= 2.0 or self.last_density_check == 0.0):
+            if self.fog_estimator is not None and (now_time - self.last_density_check >= 1.0 or self.last_density_check == 0.0):
                 self.last_density_check = now_time
                 try:
                     # Prep image for ResNet-18 (resize to 224x224 and normalize using ImageNet stats)

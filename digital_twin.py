@@ -236,6 +236,31 @@ class DigitalTwin:
         mode_txt = font_hud.render(f"MODE: {mode_str}", True, mode_color)
         self.surface.blit(mode_txt, (20, 40))
         
+        # HUD: Emergency Brake Indicator (SYSTEM_RULES.md)
+        if getattr(self, 'emergency_brake_active', False):
+            brake_reason = getattr(self, 'emergency_brake_reason', 'EMERGENCY BRAKE')
+            # Flash red banner across top
+            banner_surf = pygame.Surface((self.width, 30), pygame.SRCALPHA)
+            banner_surf.fill((220, 38, 38, 200))
+            self.surface.blit(banner_surf, (0, 60))
+            font_alert = pygame.font.SysFont("Consolas", 16, bold=True)
+            alert_txt = font_alert.render(f"[!] {brake_reason}", True, (255, 255, 255))
+            txt_rect = alert_txt.get_rect(center=(self.width // 2, 75))
+            self.surface.blit(alert_txt, txt_rect)
+            
+            # Brake lights on car (red glow at rear)
+            pygame.draw.circle(self.surface, (239, 68, 68), (int(car_front_x - 12), int(car_front_y + self.length_car - 10)), 5)
+            pygame.draw.circle(self.surface, (239, 68, 68), (int(car_front_x + 12), int(car_front_y + self.length_car - 10)), 5)
+        
+        # HUD: Max safe speed indicator
+        max_safe = getattr(self, 'max_safe_speed_kmh', 100.0)
+        if speed_kmh > max_safe:
+            overspeed_txt = font_hud.render(f"OVERSPEEDING! MAX: {max_safe:.0f} km/h", True, (239, 68, 68))
+            self.surface.blit(overspeed_txt, (self.width - 300, 20))
+        else:
+            safe_txt = font_hud.render(f"SAFE SPEED: {max_safe:.0f} km/h", True, (16, 185, 129))
+            self.surface.blit(safe_txt, (self.width - 260, 20))
+        
         # Outer Border
         pygame.draw.rect(self.surface, (30, 41, 59), (0, 0, self.width, self.height), 3)
         

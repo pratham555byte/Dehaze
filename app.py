@@ -1,4 +1,5 @@
 import os
+import requests
 import time
 import threading
 import subprocess
@@ -255,12 +256,55 @@ class LiveStreamManager:
                 out_img = postprocess_image(chw_to_hwc(output.detach().cpu().squeeze(0).float().numpy()), self.postprocess_mode)
                 out_uint8 = np.clip(out_img * 255.0, 0, 255).astype(np.uint8)
                 
+                # Try fetching sensor data from prototype route if configured or IP matches
+                lidar_distances = None
+                is_live_flag = False
+                speed_kmh = 60.0
+                
+                is_proto_ip = (esp32_comm.esp32_ip == "10.248.116.230")
+                is_proto_url = (self.grabber and self.grabber.stream_url and "10.248.116.230" in self.grabber.stream_url)
+                if is_proto_ip or is_proto_url:
+                    try:
+                        resp = requests.get("http://10.248.116.230/sensor", timeout=0.08)
+                        if resp.status_code == 200:
+                            sensor_data = resp.json()
+                            l_val = float(sensor_data.get("left", 8000.0))
+                            c_val = float(sensor_data.get("center", 8000.0))
+                            r_val = float(sensor_data.get("right", 8000.0))
+                            
+                            if l_val <= 0: l_val = 8000.0
+                            if c_val <= 0: c_val = 8000.0
+                            if r_val <= 0: r_val = 8000.0
+                            
+                            lidar_distances = [l_val / 10.0, c_val / 10.0, r_val / 10.0]
+                            is_live_flag = True
+                            
+                            # Feed this back to esp32_comm so twin/ACC gets the updated values
+                            with esp32_comm.lock:
+                                esp32_comm.dist_l = l_val / 10.0
+                                esp32_comm.dist_c = c_val / 10.0
+                                esp32_comm.dist_r = r_val / 10.0
+                                esp32_comm.last_packet_time = time.time()
+                                esp32_comm.connected = True
+                    except Exception as sensor_err:
+                        print(f"Error fetching prototype sensor: {sensor_err}")
+                
+                if lidar_distances is None:
+                    connected_esp, l_dist, c_dist, r_dist, real_speed = esp32_comm.get_telemetry()
+                    if connected_esp:
+                        lidar_distances = [l_dist, c_dist, r_dist]
+                        is_live_flag = True
+                        speed_kmh = real_speed
+                else:
+                    _, _, _, _, real_speed = esp32_comm.get_telemetry()
+                    speed_kmh = real_speed
+
                 out_bgr = cv2.cvtColor(out_uint8, cv2.COLOR_RGB2BGR)
                 annotated_bgr = adas_pipeline.run_pipeline(
                     out_bgr,
-                    current_speed_kmh=60.0,
-                    is_live=False,
-                    lidar_distances=None
+                    current_speed_kmh=speed_kmh,
+                    is_live=is_live_flag,
+                    lidar_distances=lidar_distances
                 )
                 self.latest_dehazed = annotated_bgr.copy()
                 annotated_rgb = cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
@@ -393,11 +437,11 @@ def run_dehaze_thread(video_path, model_name, resolution, fp16, preprocess_mode,
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
         
         duration = frame_count / fps_in
-        target_frame_count = int(round(duration * 12.0))
+        target_frame_count = int(round(duration * 10.0))
         if target_frame_count < 1:
             target_frame_count = 1
             
-        keep_indices = set(int(round(k * (fps_in / 12.0))) for k in range(target_frame_count))
+        keep_indices = set(int(round(k * (fps_in / 10.0))) for k in range(target_frame_count))
         total_targets = len(keep_indices)
         
         ok, frame = capture.read()
@@ -439,7 +483,7 @@ def run_dehaze_thread(video_path, model_name, resolution, fp16, preprocess_mode,
             '-vcodec', 'rawvideo',
             '-pix_fmt', 'rgb24',
             '-s', f'{new_w}x{new_h}',
-            '-r', '12.0',
+            '-r', '10.0',
             '-i', '-',
             '-vcodec', 'libx264',
             '-pix_fmt', 'yuv420p',
@@ -461,7 +505,7 @@ def run_dehaze_thread(video_path, model_name, resolution, fp16, preprocess_mode,
                 '-vcodec', 'rawvideo',
                 '-pix_fmt', 'rgb24',
                 '-s', f'{new_w * 2}x{new_h}',
-                '-r', '12.0',
+                '-r', '10.0',
                 '-i', '-',
                 '-vcodec', 'libx264',
                 '-pix_fmt', 'yuv420p',
@@ -587,7 +631,7 @@ def run_dehaze_thread(video_path, model_name, resolution, fp16, preprocess_mode,
 # ==============================================================================
 
 dehaze_mod = DehazeModule(model_name='dehazeformer-t', resolution=320, device='auto')
-esp32_comm = ESP32Communication(esp32_ip="192.168.4.1", esp32_port=5005, local_port=5006)
+esp32_comm = ESP32Communication(esp32_ip="10.248.116.230", esp32_port=5005, local_port=5006, mode="http")
 sensor_proc = SensorProcessing(ema_alpha=0.18, max_valid_range=300.0)
 acc_system = AdaptiveCruiseControl(target_distance=50.0, critical_distance=25.0, Kp=4.5, Kd=90.0)
 twin_sim = DigitalTwin(width=580, height=480)
@@ -623,6 +667,8 @@ def twin_processing_loop():
         if dt <= 0:
             dt = 0.001
             
+        connected, l_dist, c_dist, r_dist, real_speed = esp32_comm.get_telemetry()
+            
         with state_lock:
             w = keyboard_state["w"]
             s = keyboard_state["s"]
@@ -630,43 +676,58 @@ def twin_processing_loop():
             d = keyboard_state["d"]
             space = keyboard_state["space"]
             
-        target_steer = 0.0
-        if a:
-            target_steer = -max_steering
-        elif d:
-            target_steer = max_steering
-            
-        cur_steer = vehicle_controls["steering"]
-        steer_diff = target_steer - cur_steer
-        if steer_diff != 0:
-            step = 90.0 * dt * (1.0 if steer_diff > 0 else -1.0)
-            if abs(step) > abs(steer_diff):
-                cur_steer = target_steer
-            else:
-                cur_steer += step
-        else:
-            cur_steer = target_steer
-            
-        cur_throttle = vehicle_controls["throttle"]
-        if space:
-            cur_throttle = 0.0
-        else:
-            target_throttle = 0.0
-            if w:
-                target_throttle = max_speed
-            elif s:
-                target_throttle = -max_speed
+        if connected:
+            # Direct mapping for physical prototype (instant, responsive controls in range -100 to 100)
+            cur_steer = 0.0
+            if a:
+                cur_steer = -80.0  # Turn left
+            elif d:
+                cur_steer = 80.0   # Turn right
                 
-            if target_throttle > cur_throttle:
-                cur_throttle = min(cur_throttle + speed_step * dt, target_throttle)
-            elif target_throttle < cur_throttle:
-                cur_throttle = max(cur_throttle - speed_step * 1.5 * dt, target_throttle)
+            cur_throttle = 0.0
+            if space:
+                cur_throttle = 0.0
+            elif w:
+                cur_throttle = 100.0  # Go forward
+            elif s:
+                cur_throttle = -100.0 # Go backward
+        else:
+            # Existing simulated kinetics for offline mode
+            target_steer = 0.0
+            if a:
+                target_steer = -max_steering
+            elif d:
+                target_steer = max_steering
+                
+            cur_steer = vehicle_controls["steering"]
+            steer_diff = target_steer - cur_steer
+            if steer_diff != 0:
+                step = 90.0 * dt * (1.0 if steer_diff > 0 else -1.0)
+                if abs(step) > abs(steer_diff):
+                    cur_steer = target_steer
+                else:
+                    cur_steer += step
+            else:
+                cur_steer = target_steer
+                
+            cur_throttle = vehicle_controls["throttle"]
+            if space:
+                cur_throttle = 0.0
+            else:
+                target_throttle = 0.0
+                if w:
+                    target_throttle = max_speed
+                elif s:
+                    target_throttle = -max_speed
+                    
+                if target_throttle > cur_throttle:
+                    cur_throttle = min(cur_throttle + speed_step * dt, target_throttle)
+                elif target_throttle < cur_throttle:
+                    cur_throttle = max(cur_throttle - speed_step * 1.5 * dt, target_throttle)
 
         with state_lock:
             vehicle_controls["throttle"] = cur_throttle
             vehicle_controls["steering"] = cur_steer
-            
-        connected, l_dist, c_dist, r_dist, real_speed = esp32_comm.get_telemetry()
         
         filtered_distances, v_rel = sensor_proc.process(l_dist, c_dist, r_dist)
         relative_velocity = v_rel
@@ -685,6 +746,13 @@ def twin_processing_loop():
                 final_throttle = 0
                 status_text = "OVERRIDE: RED LIGHT BRAKE"
         
+        # ADAS Pipeline Emergency Brake Override (SYSTEM_RULES.md §5)
+        # Force-stop the car when proximity/TTC thresholds are breached
+        adas_runner = dehaze_mod.adas_pipeline
+        if adas_runner.emergency_brake and final_throttle > 0:
+            final_throttle = 0
+            status_text = f"EMERGENCY BRAKE: {adas_runner.emergency_brake_reason}"
+        
         acc_status_text = status_text
         esp32_comm.send_control(final_throttle, cur_steer)
         
@@ -702,6 +770,11 @@ def twin_processing_loop():
             distances=[l_dist, c_dist, r_dist] if connected else [sim_readings[0], sim_readings[1], sim_readings[2]],
             is_live=connected
         )
+        
+        # Feed ADAS safety state into digital twin for HUD display
+        twin_sim.emergency_brake_active = adas_runner.emergency_brake
+        twin_sim.emergency_brake_reason = adas_runner.emergency_brake_reason
+        twin_sim.max_safe_speed_kmh = adas_runner.max_safe_speed_kmh
             
         surf = twin_sim.render()
         
@@ -957,6 +1030,9 @@ def api_config():
             esp32_comm.stop()
             esp32_comm.mode = new_mode
             esp32_comm.start()
+    if "reconnect_esp32" in data and data["reconnect_esp32"]:
+        esp32_comm.stop()
+        esp32_comm.start()
     if "distance_mode" in data:
         dehaze_mod.adas_pipeline.set_distance_mode(data["distance_mode"])
     if "gps_lat" in data:
@@ -1035,7 +1111,13 @@ def api_telemetry():
         "esp32_ip": esp32_comm.esp32_ip,
         "gps_lat": runner.lat,
         "gps_lon": runner.lon,
-        "cruising_speed": runner.cruising_speed
+        "cruising_speed": runner.cruising_speed,
+        
+        # SYSTEM_RULES.md safety telemetry
+        "emergency_brake": runner.emergency_brake,
+        "emergency_brake_reason": runner.emergency_brake_reason,
+        "max_safe_speed": round(runner.max_safe_speed_kmh, 1),
+        "is_overspeeding": runner.is_overspeeding
     })
 
 # --- Static results routes ---

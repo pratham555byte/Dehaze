@@ -1356,7 +1356,10 @@
 
             <div class="control-group">
                 <label for="esp32-ip-input">ESP32 VEHICLE IP</label>
-                <input type="text" id="esp32-ip-input" value="192.168.4.1" placeholder="e.g. 192.168.4.1" onchange="updateTwinConfig()">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="esp32-ip-input" value="192.168.4.1" placeholder="e.g. 192.168.4.1" onchange="updateTwinConfig()" style="flex: 1; min-width: 0;">
+                    <button class="btn-action btn-action-primary" id="btn-connect-esp32" onclick="triggerEsp32Connect()" style="white-space: nowrap; padding: 0 16px; margin: 0; font-size: 0.8rem; border-radius: 10px; height: 44px; display: inline-flex; align-items: center; justify-content: center;">Connect</button>
+                </div>
             </div>
 
             <div class="control-group">
@@ -1459,6 +1462,11 @@
 
         <div class="panel">
             <div class="panel-title">Live Telemetry</div>
+            
+            <div class="tel-card">
+                <div class="tel-label">PROTOTYPE CONNECTION STATUS</div>
+                <div class="tel-value" id="val-connection-status" style="font-size: 1.15rem; color: var(--accent-red); font-weight: bold; font-family: var(--font-headings);">DISCONNECTED</div>
+            </div>
             
             <div class="ttc-alert" id="ttc-box">
                 COLLISION WARNING<br>
@@ -2146,6 +2154,45 @@
             });
         }
 
+        function triggerEsp32Connect() {
+            const btn = document.getElementById('btn-connect-esp32');
+            const originalText = btn.innerText;
+            btn.innerText = "Connecting...";
+            btn.disabled = true;
+            btn.style.opacity = "0.7";
+            
+            updateTwinConfig();
+            
+            setTimeout(() => {
+                fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reconnect_esp32: true })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    btn.innerText = "Reconnected";
+                    btn.style.backgroundColor = "var(--accent-green)";
+                    setTimeout(() => {
+                        btn.innerText = originalText;
+                        btn.disabled = false;
+                        btn.style.opacity = "1";
+                        btn.style.backgroundColor = "";
+                    }, 1000);
+                })
+                .catch(err => {
+                    btn.innerText = "Failed";
+                    btn.style.backgroundColor = "var(--accent-red)";
+                    setTimeout(() => {
+                        btn.innerText = originalText;
+                        btn.disabled = false;
+                        btn.style.opacity = "1";
+                        btn.style.backgroundColor = "";
+                    }, 1000);
+                });
+            }, 500);
+        }
+
         // Mouse Drag Twin Obstacles
         const twinImg = document.getElementById('twin-img');
         
@@ -2204,13 +2251,23 @@
             .then(res => res.json())
             .then(data => {
                 const badge = document.getElementById('conn-badge');
+                const cardStatus = document.getElementById('val-connection-status');
+                
                 if (prevTelemetry.connected !== data.connected) {
                     if (data.connected) {
                         badge.className = "status-badge connected";
                         badge.innerText = "CONNECTED";
+                        if (cardStatus) {
+                            cardStatus.innerText = "CONNECTED";
+                            cardStatus.style.color = "var(--accent-green)";
+                        }
                     } else {
                         badge.className = "status-badge disconnected";
                         badge.innerText = "DISCONNECTED";
+                        if (cardStatus) {
+                            cardStatus.innerText = "DISCONNECTED";
+                            cardStatus.style.color = "var(--accent-red)";
+                        }
                     }
                 }
                 
