@@ -320,13 +320,25 @@ class ADASPipelineRunner:
             if hist:
                 trend = hist.get("drift_direction", "stable")
                 
+            extra_data = {
+                "left_sensor_m": round(float(esp32_sensors_m["left"]), 2),
+                "center_sensor_m": round(float(esp32_sensors_m["middle"]), 2),
+                "right_sensor_m": round(float(esp32_sensors_m["right"]), 2),
+                "time_to_collision_sec": round(float(self.ttc), 2),
+                "relative_velocity_mps": round(float(self.relative_velocity), 2),
+                "road_name": self.road_context.get("road", "Unknown Road"),
+                "blackspots": self.road_context.get("blackspots", []),
+                "traffic_light": self.traffic_light_status
+            }
+            
             ctx = DrivingContext(
                 fog_density=fog_score_100,
                 fog_trend=trend,
                 nearest_object_m=nearest_distance,
                 nearest_object_label=nearest_label,
                 road_type=self.road_context.get("road_type", "highway"),
-                current_speed_kmh=current_speed_kmh
+                current_speed_kmh=current_speed_kmh,
+                extra=extra_data
             )
             
             def query_ollama_async(prompt_ctx):
@@ -352,6 +364,8 @@ class ADASPipelineRunner:
         elapsed = t_end - t_start
         self.fps = 1.0 / max(elapsed, 0.001)
 
+        if (w_orig, h_orig) != (640, 480):
+            return cv2.resize(annotated_frame, (w_orig, h_orig))
         return annotated_frame
 
     def update_latest_fog(self, density_0_1):

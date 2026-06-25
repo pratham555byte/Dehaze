@@ -44,14 +44,15 @@ progress_state = {
     "eta": 0.0,
     "error": None,
     "output_video": None,
-    "comparison_video": None
+    "comparison_video": None,
+    "llm_advice": {}
 }
 
 # Live preview during video processing
 latest_process_frame = None
 latest_process_frame_lock = threading.Lock()
 
-def update_progress(status=None, current_frame=None, total_frames=None, fps=None, eta=None, error=None, output_video=None, comparison_video=None):
+def update_progress(status=None, current_frame=None, total_frames=None, fps=None, eta=None, error=None, output_video=None, comparison_video=None, llm_advice=None):
     with progress_lock:
         if status is not None: progress_state["status"] = status
         if current_frame is not None: progress_state["current_frame"] = current_frame
@@ -61,6 +62,7 @@ def update_progress(status=None, current_frame=None, total_frames=None, fps=None
         if error is not None: progress_state["error"] = error
         if output_video is not None: progress_state["output_video"] = output_video
         if comparison_video is not None: progress_state["comparison_video"] = comparison_video
+        if llm_advice is not None: progress_state["llm_advice"] = llm_advice
 
 def load_state_dict(model_path, device):
     checkpoint = torch.load(model_path, map_location=device)
@@ -124,8 +126,8 @@ class LiveStreamManager:
         self.model_name = 'dehazeformer-t'
         self.resolution = 640
         self.fp16 = True
-        self.preprocess_mode = 'video'
-        self.postprocess_mode = 'video'
+        self.preprocess_mode = 'clahe'
+        self.postprocess_mode = 'sharpen'
         
         self.latest_mjpeg = None
         self.latest_dehazed = None
@@ -141,6 +143,7 @@ class LiveStreamManager:
         self.recording_session = None
         self.recording_w = 0
         self.recording_h = 0
+        self.latest_llm_advice = {}
 
     def start(self, url, model_name, resolution, fp16, preprocess_mode, postprocess_mode):
         self.stop()
@@ -193,9 +196,9 @@ class LiveStreamManager:
             network = eval(self.model_name.replace('-', '_'))()
             network.load_state_dict(load_state_dict(model_path, device))
             network.to(device)
-            if self.fp16 and device.type == 'cuda':
-                network.half()
             network.eval()
+            from adas_pipeline import ADASPipelineRunner
+            adas_pipeline = ADASPipelineRunner(device=device)
         except Exception as e:
             print(f"Error loading model in live stream loop: {e}")
             self.active = False
@@ -250,11 +253,21 @@ class LiveStreamManager:
                 out_img = postprocess_image(chw_to_hwc(output.detach().cpu().squeeze(0).float().numpy()), self.postprocess_mode)
                 out_uint8 = np.clip(out_img * 255.0, 0, 255).astype(np.uint8)
                 
-                self.latest_dehazed = cv2.cvtColor(out_uint8, cv2.COLOR_RGB2BGR)
+                out_bgr = cv2.cvtColor(out_uint8, cv2.COLOR_RGB2BGR)
+                annotated_bgr = adas_pipeline.run_pipeline(
+                    out_bgr,
+                    current_speed_kmh=60.0,
+                    is_live=False,
+                    lidar_distances=None
+                )
+                self.latest_dehazed = annotated_bgr.copy()
+                annotated_rgb = cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
                 
-                # Side-by-side compile
+                # Side-by-side compile: use annotated frame
                 orig_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                combined = np.concatenate([orig_rgb, out_uint8], axis=1)
+                if annotated_rgb.shape[:2] != orig_rgb.shape[:2]:
+                    annotated_rgb = cv2.resize(annotated_rgb, (orig_rgb.shape[1], orig_rgb.shape[0]))
+                combined = np.concatenate([orig_rgb, annotated_rgb], axis=1)
                 combined_bgr = cv2.cvtColor(combined, cv2.COLOR_RGB2BGR)
                 
                 ok_enc, jpeg_bytes = cv2.imencode('.jpg', combined_bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -263,11 +276,15 @@ class LiveStreamManager:
                     self.frame_ready_event.set()
                     self.frame_ready_event.clear()
                     
+                # Cache latest Ollama ADAS suggestion
+                with adas_pipeline._llm_lock:
+                    self.latest_llm_advice = adas_pipeline.cached_llm_response
+                    
                 with self.recording_lock:
                     if self.recording_process:
                         if new_w == self.recording_w and new_h == self.recording_h:
                             try:
-                                self.recording_process.stdin.write(out_uint8.tobytes())
+                                self.recording_process.stdin.write(annotated_rgb.tobytes())
                             except Exception as rec_err:
                                 print(f"Error piping frame to live recording: {rec_err}")
                                 
@@ -452,6 +469,9 @@ def run_dehaze_thread(video_path, model_name, resolution, fp16, preprocess_mode,
             
         update_progress(status="dehazing", current_frame=0, total_frames=total_targets)
         
+        from adas_pipeline import ADASPipelineRunner
+        adas_pipeline = ADASPipelineRunner(device=device)
+        
         current_idx = 0
         written = 0
         start_time = time.perf_counter()
@@ -478,17 +498,29 @@ def run_dehaze_thread(video_path, model_name, resolution, fp16, preprocess_mode,
                     out_img = postprocess_image(chw_to_hwc(output.detach().cpu().squeeze(0).float().numpy()), postprocess_mode)
                     out_uint8 = np.clip(out_img * 255.0, 0, 255).astype(np.uint8)
                     
-                    process_out.stdin.write(out_uint8.tobytes())
+                    # Convert to BGR and process through the ADAS pipeline
+                    out_bgr = cv2.cvtColor(out_uint8, cv2.COLOR_RGB2BGR)
+                    annotated_bgr = adas_pipeline.run_pipeline(
+                        out_bgr,
+                        current_speed_kmh=60.0,
+                        is_live=False,
+                        lidar_distances=None
+                    )
+                    out_uint8_annotated = cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
+                    
+                    process_out.stdin.write(out_uint8_annotated.tobytes())
                     
                     if process_comp:
                         orig_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                        comp_frame = np.concatenate([orig_rgb, out_uint8], axis=1)
+                        if out_uint8_annotated.shape[:2] != orig_rgb.shape[:2]:
+                            out_uint8_annotated = cv2.resize(out_uint8_annotated, (orig_rgb.shape[1], orig_rgb.shape[0]))
+                        comp_frame = np.concatenate([orig_rgb, out_uint8_annotated], axis=1)
                         process_comp.stdin.write(comp_frame.tobytes())
                         with latest_process_frame_lock:
                             latest_process_frame = cv2.cvtColor(comp_frame, cv2.COLOR_RGB2BGR)
                     else:
                         with latest_process_frame_lock:
-                            latest_process_frame = cv2.cvtColor(out_uint8, cv2.COLOR_RGB2BGR)
+                            latest_process_frame = cv2.cvtColor(out_uint8_annotated, cv2.COLOR_RGB2BGR)
                         
                     written += 1
                     
@@ -496,7 +528,11 @@ def run_dehaze_thread(video_path, model_name, resolution, fp16, preprocess_mode,
                     cur_fps = written / max(elapsed, 0.001)
                     eta = (total_targets - written) / max(cur_fps, 0.001)
                     
-                    update_progress(current_frame=written, total_frames=total_targets, fps=cur_fps, eta=eta)
+                    # Extract latest LLM advice
+                    with adas_pipeline._llm_lock:
+                        llm_advice = adas_pipeline.cached_llm_response
+                        
+                    update_progress(current_frame=written, total_frames=total_targets, fps=cur_fps, eta=eta, llm_advice=llm_advice)
                     
                 current_idx += 1
                 ok, frame = capture.read()
@@ -568,6 +604,8 @@ def twin_processing_loop():
     Headless Pygame render loop running in the background at 30 FPS.
     """
     global latest_twin_jpeg, acc_status_text, relative_velocity, acc_enabled
+    import os
+    os.environ["SDL_VIDEODRIVER"] = "dummy"
     import pygame
     pygame.init()
     
@@ -648,17 +686,17 @@ def twin_processing_loop():
         acc_status_text = status_text
         esp32_comm.send_control(final_throttle, cur_steer)
         
-        sim_readings = twin_sim.update(final_throttle, cur_steer, connected, real_speed, dt)
+        sim_readings = twin_sim.update(final_throttle, cur_steer, connected, real_speed, dt, l_dist, c_dist, r_dist)
         
         if not connected:
             esp32_comm.update_simulated_telemetry(
                 sim_readings[0], sim_readings[1], sim_readings[2], 
-                float(abs(twin_sim.speed) / 10.0)
+                float(abs(twin_sim.speed))
             )
             
         # Update dehazing module vehicle state for ADAS overlays
         dehaze_mod.update_vehicle_state(
-            speed=real_speed if connected else float(abs(twin_sim.speed) / 10.0),
+            speed=real_speed if connected else float(abs(twin_sim.speed)),
             distances=[l_dist, c_dist, r_dist] if connected else [sim_readings[0], sim_readings[1], sim_readings[2]],
             is_live=connected
         )
@@ -790,7 +828,8 @@ def live_stats():
             "connected": connected,
             "fps": round(live_manager.fps, 1),
             "latency": round(live_manager.latency, 1),
-            "is_recording": live_manager.recording_process is not None
+            "is_recording": live_manager.recording_process is not None,
+            "llm_advice": getattr(live_manager, 'latest_llm_advice', {})
         })
 
 @app.route('/live/snapshot')
@@ -985,8 +1024,8 @@ def api_telemetry():
         "nearest_obj_dist": round(runner.nearest_obj_dist, 2),
         "traffic_light_status": runner.traffic_light_status,
         "llm_advice": runner.cached_llm_response if isinstance(runner.cached_llm_response, dict) else {},
-        "road_name": runner.road_context.get("road_name", "Unknown Road"),
-        "blackspot_active": runner.road_context.get("blackspots", False),
+        "road_name": runner.road_context.get("road", runner.road_context.get("road_name", "Unknown Road")),
+        "blackspot_active": bool(runner.road_context.get("blackspots", False)),
         
         # Merged settings indicators
         "distance_mode": runner.distance_mode,

@@ -27,8 +27,8 @@ class DehazeModule:
         self.resolution = resolution
         self.camera_index = 0 # default to Front camera
         self.fp16 = True
-        self.preprocess_mode = 'video'
-        self.postprocess_mode = 'video'
+        self.preprocess_mode = 'clahe'
+        self.postprocess_mode = 'sharpen'
         
         if device == 'auto':
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -308,7 +308,7 @@ class DehazeModule:
                 manual = self.manual_override
                 thresh = self.threshold
                 
-            if self.fog_estimator is not None and (now_time - self.last_density_check >= 60.0 or self.last_density_check == 0.0):
+            if self.fog_estimator is not None and (now_time - self.last_density_check >= 2.0 or self.last_density_check == 0.0):
                 self.last_density_check = now_time
                 try:
                     # Prep image for ResNet-18 (resize to 224x224 and normalize using ImageNet stats)

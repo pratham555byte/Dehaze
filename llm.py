@@ -33,40 +33,38 @@ FOG_HISTORY_WINDOW = 5             # rolling window for trend analysis
 # SYSTEM PROMPT  (strict JSON, priority-ordered reasoning)
 # ---------------------------------------------------------------------------
 SYSTEM_PROMPT = """
-You are a real-time AI-powered ADAS (Advanced Driver Assistance System) safety engine.
+You are a real-time AI-powered ADAS (Advanced Driver Assistance System) safety advisor.
+You will receive real-time driving context, including geocoded road name, active blackspots list, traffic signal state, vehicle speed, three proximity sensors (left_sensor_m, center_sensor_m, right_sensor_m) as well as Time-to-Collision (TTC) and relative approach speed.
 
-## Priority Order (highest to lowest)
-1. Collision avoidance — vehicle < 10 m ahead
-2. Visibility hazards — fog_density > 70
-3. Speed adaptation   — road_type curve/wet
-4. General guidance
+## Priority Safety Rules:
+1. Collision Avoidance (Highest Priority):
+   - If time_to_collision_sec is positive and < 4.0, or center_sensor_m < 5.0, set risk_level to CRITICAL.
+   - Recommended speed must be 0 km/h or a heavy reduction. Suggest "Brake now! TTC < X s".
+2. Traffic Signal Compliance:
+   - If traffic_light is "RED", recommended speed is "0 km/h". Highlight "RED signal ahead" in hazard_alert.
+   - If traffic_light is "YELLOW", advise slowing down and preparing to stop.
+3. Blackspot Corridor Awareness:
+   - If nearby blackspots list is active, mention the name of the blackspot (e.g. "NH44 Fog Corridor") in hazard_alert or short_explanation. Limit speed to the blackspot speed limit or 40 km/h.
+4. Steering and Maneuvering:
+   - Use left_sensor_m, center_sensor_m, and right_sensor_m to guide steering:
+     - If center is blocked (e.g. center_sensor_m < 8.0) but left_sensor_m is clear (> 15.0), recommend "Steer left to avoid obstacle".
+     - If center is blocked but right_sensor_m is clear, recommend "Steer right to avoid obstacle".
+     - If all three are blocked, recommend "Stop immediately - path fully blocked".
+5. Fog adaptation:
+   - fog_density >= 90 or worsening trend: reduce speed to < 20 km/h.
 
-## Fog Reasoning Rules
-- fog_density >= 90  → CRITICAL visibility; cap speed at 20 km/h
-- fog_density 70–89  → HIGH visibility impairment; cap speed at 40 km/h
-- fog_density 50–69  → MODERATE; reduce speed by 30%
-- fog_density < 50   → LOW; normal speed permissible
-- fog_trend = "worsening" → escalate risk one level
-- fog_trend = "improving" → may reduce risk one level
-
-## Object Proximity Rules
-- nearest_object_m < 5   → CRITICAL risk, emergency brake alert
-- nearest_object_m 5–10  → HIGH risk, hard slow-down
-- nearest_object_m 10–20 → MODERATE risk, increase following distance
-- nearest_object_m > 20  → LOW risk from proximity
-
-## Output Contract
-Return ONLY a single valid JSON object. No markdown. No extra text.
+## Output Contract:
+Return ONLY a single valid JSON object containing the exact keys listed below. Do NOT wrap in markdown code blocks. Do not add conversational text. Every value must reflect the specific names/numbers from the inputs.
 
 {
   "risk_level":        "LOW | MODERATE | HIGH | CRITICAL",
-  "hazard_alert":      "<primary hazard, max 10 words>",
+  "hazard_alert":      "<primary hazard indicating specific road name or sensor obstacle, max 10 words>",
   "recommended_speed": "<N km/h>",
-  "driving_suggestion":"<actionable instruction, max 15 words>",
-  "short_explanation": "<why, max 20 words>",
+  "driving_suggestion":"<actionable steering/braking instruction using sensor/TTC, max 15 words>",
+  "short_explanation": "<concise reason mentioning location or sensor state, max 20 words>",
   "priority_hazard":   "<collision | visibility | speed | none>",
-  "voice_alert":       "<max 8 words, speech-ready>",
-  "confidence":        <0.0–1.0>
+  "voice_alert":       "<max 8 words speech-ready warning, e.g. 'Red light ahead, stop' or 'Collision warning, brake'>",
+  "confidence":        <0.0-1.0>
 }
 """
 
@@ -206,45 +204,133 @@ def _safe_parse_json(raw: str) -> Optional[dict]:
 def _rule_based_fallback(ctx: DrivingContext) -> dict:
     """
     Deterministic safety output when LLM fails.
-    Ensures the system never returns nothing.
+    Ensures the system never returns nothing, and generates
+    detailed context-aware safety advice dynamically.
     """
+    # Extract values from context and extra dictionary safely
+    left_m = ctx.extra.get("left_sensor_m", ctx.nearest_object_m)
+    center_m = ctx.extra.get("center_sensor_m", ctx.nearest_object_m)
+    right_m = ctx.extra.get("right_sensor_m", ctx.nearest_object_m)
+    
+    ttc = ctx.extra.get("time_to_collision_sec", -1.0)
+    v_rel = ctx.extra.get("relative_velocity_mps", 0.0)
+    road_name = ctx.extra.get("road_name", "Unknown Road")
+    blackspots = ctx.extra.get("blackspots", [])
+    traffic_light = ctx.extra.get("traffic_light", "UNKNOWN")
+    
+    # Base states
     risk = "LOW"
-    speed = 60
-    hazard = "Normal driving conditions"
-    suggestion = "Maintain current speed and distance"
+    rec_speed = max(20.0, ctx.current_speed_kmh)
+    hazard = "Clear path ahead"
+    suggestion = "Maintain safe cruising distance"
     priority = "none"
     voice = "Drive safely"
+    explanation = f"Driving on {road_name} under normal conditions."
+    
+    # 1. Traffic Light Override
+    if traffic_light == "RED":
+        risk = "HIGH"
+        rec_speed = 0.0
+        hazard = "RED traffic signal detected"
+        suggestion = "Bring vehicle to a complete stop"
+        priority = "speed"
+        voice = "Red light ahead, stop"
+        explanation = "Traffic signal is RED, vehicle must hold position."
+    elif traffic_light == "YELLOW":
+        risk = "MODERATE"
+        rec_speed = min(30.0, ctx.current_speed_kmh * 0.5)
+        hazard = "YELLOW traffic signal detected"
+        suggestion = "Prepare to stop at intersection"
+        priority = "speed"
+        voice = "Yellow light, slow down"
+        explanation = "Traffic signal is YELLOW, exercise caution."
 
-    if ctx.fog_density >= 90 or ctx.nearest_object_m < 5:
-        risk, speed, hazard = "CRITICAL", 20, "Critical hazard detected"
-        suggestion = "Brake immediately and stop safely"
-        priority = "collision" if ctx.nearest_object_m < 5 else "visibility"
-        voice = "Stop now, critical hazard ahead"
-    elif ctx.nearest_object_m < 10:
-        risk, speed, hazard = "HIGH", 30, "Vehicle very close ahead"
-        suggestion = "Slow down and increase following distance"
+    # 2. Collision / Proximity warnings (LiDAR/Camera sensors)
+    is_critical_proximity = (center_m < 3.0 or left_m < 2.0 or right_m < 2.0)
+    is_warning_proximity = (center_m < 8.0 or left_m < 5.0 or right_m < 5.0)
+    
+    if (ttc > 0.0 and ttc < 4.0) or is_critical_proximity:
+        risk = "CRITICAL"
+        rec_speed = 0.0
         priority = "collision"
-        voice = "Slow down, vehicle ahead"
-    elif ctx.fog_density >= 70:
-        risk, speed, hazard = "HIGH", 40, "Dense fog — severely reduced visibility"
-        suggestion = "Reduce speed and use fog lights"
-        priority = "visibility"
-        voice = "Dense fog, reduce speed now"
-    elif ctx.fog_density >= 50:
-        risk, speed, hazard = "MODERATE", 45, "Moderate fog"
-        suggestion = "Reduce speed and stay alert"
-        priority = "visibility"
-        voice = "Fog ahead, slow down"
+        if ttc > 0.0 and ttc < 4.0:
+            hazard = f"Collision risk: TTC {ttc:.1f}s"
+            suggestion = f"Brake now! TTC is {ttc:.1f}s"
+            voice = "Collision warning, brake now"
+            explanation = f"Critical collision danger. Closing speed {abs(v_rel):.1f} m/s, impact in {ttc:.1f}s."
+        else:
+            hazard = f"Path blocked center at {center_m:.1f}m"
+            suggestion = "Stop immediately - path fully blocked"
+            voice = "Path blocked, stop immediately"
+            explanation = f"Critical proximity threshold breached: C: {center_m:.1f}m, L: {left_m:.1f}m, R: {right_m:.1f}m."
+            
+    elif is_warning_proximity:
+        risk = "HIGH"
+        rec_speed = min(30.0, ctx.current_speed_kmh)
+        priority = "collision"
+        
+        # Steering advice based on sensor clearances
+        if center_m < 8.0:
+            if left_m > right_m and left_m > 8.0:
+                hazard = f"Obstacle center at {center_m:.1f}m"
+                suggestion = "Steer left to avoid obstacle"
+                voice = "Obstacle ahead, steer left"
+                explanation = f"Center path blocked at {center_m:.1f}m. Left lane clear ({left_m:.1f}m)."
+            elif right_m > left_m and right_m > 8.0:
+                hazard = f"Obstacle center at {center_m:.1f}m"
+                suggestion = "Steer right to avoid obstacle"
+                voice = "Obstacle ahead, steer right"
+                explanation = f"Center path blocked at {center_m:.1f}m. Right lane clear ({right_m:.1f}m)."
+            else:
+                hazard = f"Path obstructed center at {center_m:.1f}m"
+                suggestion = "Decelerate and prepare to stop"
+                voice = "Path obstructed, slow down"
+                explanation = f"All lanes restricted. C: {center_m:.1f}m, L: {left_m:.1f}m, R: {right_m:.1f}m."
+        else:
+            hazard = "Obstacle in adjacent lane"
+            suggestion = "Keep center lane alignment"
+            voice = "Obstacle nearby, stay in lane"
+            explanation = f"Side restriction detected. Left: {left_m:.1f}m, Right: {right_m:.1f}m."
+
+    # 3. Fog Adaptation (if not already overridden by collision)
+    if risk not in ["HIGH", "CRITICAL"]:
+        if ctx.fog_density >= 80:
+            risk = "HIGH"
+            rec_speed = min(25.0, rec_speed)
+            hazard = "Dense fog — severely limited visibility"
+            suggestion = "Reduce speed and use fog lights"
+            priority = "visibility"
+            voice = "Dense fog, reduce speed"
+            explanation = f"Visibility is extremely low ({ctx.fog_density:.1f}% fog). Keeping speed under 25 km/h."
+        elif ctx.fog_density >= 50:
+            risk = "MODERATE"
+            rec_speed = min(40.0, rec_speed)
+            hazard = "Moderate fog detected"
+            suggestion = "Slow down and use low beams"
+            priority = "visibility"
+            voice = "Fog ahead, slow down"
+            explanation = f"Moderate fog ({ctx.fog_density:.1f}% fog) restricting long-range sight."
+
+    # 4. Blackspot Corridor Warning
+    if blackspots and risk not in ["CRITICAL"]:
+        spot = blackspots[0]
+        spot_name = spot.get("name", "Blackspot")
+        risk = "HIGH" if risk == "LOW" else risk
+        rec_speed = min(40.0, rec_speed)
+        hazard = f"Accident Zone: {spot_name}"
+        suggestion = "Caution in blackspot corridor"
+        voice = "Accident zone ahead, drive carefully"
+        explanation = f"Driving near {spot_name} ({spot.get('severity', 'high')} risk). Speed restricted to 40 km/h."
 
     return {
         "risk_level": risk,
         "hazard_alert": hazard,
-        "recommended_speed": f"{speed} km/h",
+        "recommended_speed": f"{int(rec_speed)} km/h" if rec_speed > 0 else "0 km/h",
         "driving_suggestion": suggestion,
-        "short_explanation": "Rule-based fallback (LLM unavailable)",
+        "short_explanation": explanation,
         "priority_hazard": priority,
         "voice_alert": voice,
-        "confidence": 0.7,
+        "confidence": 0.75,
         "_source": "fallback",
     }
 
@@ -276,7 +362,7 @@ def get_llm_decision(
         ctx_dict = context
         ctx_obj = DrivingContext(**{k: context.get(k, v)
                                     for k, v in DrivingContext.__dataclass_fields__.items()
-                                    if k in context})
+                                      if k in context})
 
     user_prompt = (
         "Analyze these driving conditions and return the JSON assessment:\n\n"
@@ -284,10 +370,13 @@ def get_llm_decision(
     )
 
     last_error: str = ""
+    models_to_try = [MODEL_NAME, "puneethkumar3619/fodvision-adas:v2"]
+    
     for attempt in range(1, MAX_RETRIES + 1):
+        model_name = models_to_try[(attempt - 1) % len(models_to_try)]
         try:
             response = chat(
-                model=MODEL_NAME,
+                model=model_name,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user",   "content": user_prompt},
@@ -302,12 +391,13 @@ def get_llm_decision(
                 if return_raw:
                     parsed["_raw"] = raw_text
                 parsed["_source"] = "llm"
+                parsed["_model_used"] = model_name
                 return parsed
 
-            last_error = f"Schema validation failed on attempt {attempt}"
+            last_error = f"Schema validation failed on attempt {attempt} using {model_name}"
 
         except Exception as exc:
-            last_error = f"Ollama error on attempt {attempt}: {exc}"
+            last_error = f"Ollama error on attempt {attempt} using {model_name}: {exc}"
 
     # All retries exhausted → rule-based fallback
     result = _rule_based_fallback(ctx_obj)

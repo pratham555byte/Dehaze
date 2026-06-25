@@ -7,292 +7,234 @@ class DigitalTwin:
         self.width = width
         self.height = height
         
-        # In-memory rendering surface (headless friendly)
+        # In-memory rendering surface
         self.surface = pygame.Surface((self.width, self.height))
         
-        # Vehicle physical properties
-        self.wheelbase = 35.0
-        self.width_car = 25.0
-        self.length_car = 50.0
+        # Ego vehicle dimensions
+        self.width_car = 24.0
+        self.length_car = 48.0
         
-        # Vehicle state (positions in pixels, angles in radians)
-        self.x = width / 2.0
-        self.y = height - 100.0
-        self.theta = -math.pi / 2.0
-        self.speed = 0.0
-        self.steering_angle = 0.0
+        # Vehicle visual/physics state
+        self.x = width / 2.0 # virtual X coordinate (290 is center)
+        self.speed = 0.0     # m/s
+        self.steering_angle = 0.0 # radians
         
-        # Static obstacles
-        self.obstacles = [
-            {"x": 120.0, "y": 150.0, "r": 30.0, "color": (100, 100, 120)},
-            {"x": 460.0, "y": 200.0, "r": 35.0, "color": (100, 100, 120)},
-            {"x": 200.0, "y": 280.0, "r": 25.0, "color": (100, 100, 120)},
-        ]
-        
-        # Dynamic leading vehicle
-        self.lead_x = width / 2.0
-        self.lead_y = height / 2.0 - 50.0
-        self.lead_r = 18.0
-        self.lead_speed = 35.0
-        self.lead_direction = -1
+        # Lanes/Road boundaries
+        self.road_scroll = 0.0
         
         # Sensor configuration (3 sensors: Left (-20°), Center (0°), Right (+20°))
         self.sensor_angles = [math.radians(-20), math.radians(0), math.radians(20)]
-        self.max_sensor_range = 300.0
+        self.max_sensor_range = 300.0 # cm
         self.sensor_readings = [self.max_sensor_range] * 3
-        self.sensor_impact_pts = [None] * 3
         
-        # Mouse dragging state
-        self.dragging_lead = False
+        # Simulated obstacles for offline mode
+        # Format: {"lane": 0/1/2, "y": float_pos_pixels, "type": "cone" | "barrier"}
+        self.sim_obstacles = [
+            {"lane": 0, "y": -100.0, "type": "barrier"},
+            {"lane": 1, "y": -350.0, "type": "cone"},
+            {"lane": 2, "y": -200.0, "type": "barrier"}
+        ]
+        self.pixel_scale = 1.2 # 1 cm = 1.2 pixels (300 cm max = 360 px)
 
-    def update(self, throttle, steering_deg, connected, real_speed, dt):
+    def update(self, throttle, steering_deg, connected, real_speed, dt, dist_l=300.0, dist_c=300.0, dist_r=300.0):
         """
-        Updates simulated ego car physics, lead car pathing, and raycasts.
+        Updates the digital twin states.
+        If connected, uses real sensor ranges.
+        If disconnected, runs offline simulation.
         """
-        # 1. Update vehicle state
         if connected:
-            self.speed = real_speed * 10.0 # scale physical speed
+            self.speed = real_speed
             self.steering_angle = math.radians(steering_deg)
+            # Use active sensor inputs
+            self.sensor_readings = [
+                min(self.max_sensor_range, max(0.0, dist_l)),
+                min(self.max_sensor_range, max(0.0, dist_c)),
+                min(self.max_sensor_range, max(0.0, dist_r))
+            ]
+            # Update virtual lateral position based on actual speed and steering
+            self.x += self.speed * 20.0 * math.sin(self.steering_angle) * dt
+            self.x = max(170.0, min(410.0, self.x))
         else:
-            target_speed = (throttle / 200.0) * 120.0
-            self.speed += (target_speed - self.speed) * 5.0 * dt
-            self.steering_angle = math.radians(steering_deg)
-
-        # Kinematic Bicycle Model
-        if abs(self.speed) > 1.0:
-            self.theta += (self.speed / self.wheelbase) * math.tan(self.steering_angle) * dt
-            self.theta = (self.theta + math.pi) % (2 * math.pi) - math.pi
-            
-        self.x += self.speed * math.cos(self.theta) * dt
-        self.y += self.speed * math.sin(self.theta) * dt
-        
-        self.x = max(20.0, min(self.width - 20.0, self.x))
-        self.y = max(20.0, min(self.height - 20.0, self.y))
-
-        # 2. Update leading vehicle movement (if not user dragged)
-        if not self.dragging_lead:
-            self.lead_y += self.lead_speed * self.lead_direction * dt
-            if self.lead_y < 60.0:
-                self.lead_y = 60.0
-                self.lead_direction = 1
-            elif self.lead_y > self.height - 60.0:
-                self.lead_y = self.height - 60.0
-                self.lead_direction = -1
-
-        # 3. Simulate VL53L0X Raycasting
-        car_front_x = self.x + (self.length_car / 2.0) * math.cos(self.theta)
-        car_front_y = self.y + (self.length_car / 2.0) * math.sin(self.theta)
-        
-        for i, angle_offset in enumerate(self.sensor_angles):
-            ray_angle = self.theta + angle_offset
-            ray_dx = math.cos(ray_angle)
-            ray_dy = math.sin(ray_angle)
-            
-            closest_dist = self.max_sensor_range
-            impact_pt = (
-                car_front_x + ray_dx * self.max_sensor_range,
-                car_front_y + ray_dy * self.max_sensor_range
-            )
-            
-            # Static Obstacles
-            for obs in self.obstacles:
-                dist = self._ray_circle_intersection(car_front_x, car_front_y, ray_dx, ray_dy, obs["x"], obs["y"], obs["r"])
-                if dist is not None and dist < closest_dist:
-                    closest_dist = dist
-                    impact_pt = (car_front_x + ray_dx * dist, car_front_y + ray_dy * dist)
-                    
-            # Lead Vehicle
-            dist_lead = self._ray_circle_intersection(car_front_x, car_front_y, ray_dx, ray_dy, self.lead_x, self.lead_y, self.lead_r)
-            if dist_lead is not None and dist_lead < closest_dist:
-                closest_dist = dist_lead
-                impact_pt = (car_front_x + ray_dx * dist_lead, car_front_y + ray_dy * dist_lead)
+            # Simulated offline kinetics
+            target_speed = (throttle / 200.0) * 15.0 # Max simulated speed ~15 m/s
+            self.speed += (target_speed - self.speed) * 4.0 * dt
+            if self.speed < 0:
+                self.speed = 0.0
                 
-            # Boundaries
-            dist_boundary = self._ray_boundary_intersection(car_front_x, car_front_y, ray_dx, ray_dy)
-            if dist_boundary < closest_dist:
-                closest_dist = dist_boundary
-                impact_pt = (car_front_x + ray_dx * dist_boundary, car_front_y + ray_dy * dist_boundary)
+            self.steering_angle = math.radians(steering_deg)
+            
+            # Update virtual lateral position
+            # Steering changes lane position X
+            self.x += self.speed * 20.0 * math.sin(self.steering_angle) * dt
+            self.x = max(170.0, min(410.0, self.x))
+            
+            # Update simulated obstacles position
+            for obs in self.sim_obstacles:
+                obs["y"] += self.speed * 30.0 * dt # scroll speed
+                
+                # If obstacle goes behind the car, reset to top at a random distance
+                if obs["y"] > self.height + 50.0:
+                    obs["y"] = -random.randint(150, 450)
+            
+            # Compute simulated sensor readings based on distance to nearest obstacles
+            for i, angle in enumerate(self.sensor_angles):
+                lane_idx = i # Left sensor maps to Left lane (0), Center to Center (1), Right to Right (2)
+                
+                # Find matching obstacle
+                matching_obs = [o for o in self.sim_obstacles if o["lane"] == lane_idx]
+                if matching_obs:
+                    obs = matching_obs[0]
+                    # Car bumper is at y = 355
+                    dist_px = 355.0 - obs["y"]
+                    if dist_px > 0:
+                        dist_cm = dist_px / self.pixel_scale
+                        noise = random.gauss(0, 1.0)
+                        self.sensor_readings[i] = min(self.max_sensor_range, max(0.0, dist_cm + noise))
+                    else:
+                        self.sensor_readings[i] = self.max_sensor_range
+                else:
+                    self.sensor_readings[i] = self.max_sensor_range
 
-            noise = random.gauss(0, 1.0)
-            self.sensor_readings[i] = max(0.0, closest_dist + noise)
-            self.sensor_impact_pts[i] = impact_pt
-
+        # Scroll road lines at speed
+        self.road_scroll = (self.road_scroll + self.speed * 30.0 * dt) % 80.0
         return self.sensor_readings
 
     def handle_mouse(self, mouse_pos, is_pressed):
-        """
-        Receives mouse drag telemetry from web requests.
-        is_pressed: boolean indicating if primary mouse button is held
-        """
-        mx, my = mouse_pos
-        dx = mx - self.lead_x
-        dy = my - self.lead_y
-        dist = math.hypot(dx, dy)
-        
-        if is_pressed:
-            if dist < self.lead_r + 15 or self.dragging_lead:
-                # Constrain lead vehicle inside boundaries
-                self.lead_x = max(15.0, min(self.width - 15.0, mx))
-                self.lead_y = max(15.0, min(self.height - 15.0, my))
-                self.dragging_lead = True
-        else:
-            self.dragging_lead = False
-
-    def _ray_circle_intersection(self, rx, ry, rdx, rdy, cx, cy, cr):
-        ocx = cx - rx
-        ocy = cy - ry
-        projection = ocx * rdx + ocy * rdy
-        if projection < 0:
-            return None
-            
-        closest_x = rx + rdx * projection
-        closest_y = ry + rdy * projection
-        
-        dist_sq = (closest_x - cx)**2 + (closest_y - cy)**2
-        r_sq = cr**2
-        
-        if dist_sq > r_sq:
-            return None
-            
-        half_chord = math.sqrt(r_sq - dist_sq)
-        t = projection - half_chord
-        if t < 0:
-            t = projection + half_chord
-            
-        return t if t >= 0 else None
-
-    def _ray_boundary_intersection(self, rx, ry, rdx, rdy):
-        t_min = self.max_sensor_range
-        
-        if rdx > 0:
-            t = (self.width - rx) / rdx
-            if 0 <= t < t_min: t_min = t
-        elif rdx < 0:
-            t = -rx / rdx
-            if 0 <= t < t_min: t_min = t
-            
-        if rdy > 0:
-            t = (self.height - ry) / rdy
-            if 0 <= t < t_min: t_min = t
-        elif rdy < 0:
-            t = -ry / rdy
-            if 0 <= t < t_min: t_min = t
-            
-        return t_min
+        """No longer used since we removed manual coordinate-dragging of fake cars."""
+        pass
 
     def render(self):
         """
-        Renders the twin onto its internal pygame.Surface, returning it.
+        Renders the HUD and scrolling road in the style of a premium EV FSD display.
+        The Ego vehicle remains centered, while the environment, obstacles and lanes scroll.
         """
-        self.surface.fill((20, 20, 25))
+        self.surface.fill((10, 12, 16)) # Dark obsidian cockpit background
         
-        # Border
-        pygame.draw.rect(self.surface, (60, 60, 75), (0, 0, self.width, self.height), 4)
+        # Centering offset (camera follows car laterally)
+        lateral_offset = -(self.x - self.width / 2.0)
         
-        # Grid lines
-        for x in range(0, self.width, 40):
-            pygame.draw.line(self.surface, (30, 30, 35), (x, 0), (x, self.height))
-        for y in range(0, self.height, 40):
-            pygame.draw.line(self.surface, (30, 30, 35), (0, y), (self.width, y))
-
-        # Static obstacles
-        for obs in self.obstacles:
-            pygame.draw.circle(self.surface, obs["color"], (int(obs["x"]), int(obs["y"])), int(obs["r"]))
-            pygame.draw.circle(self.surface, (130, 130, 150), (int(obs["x"]), int(obs["y"])), int(obs["r"]), 2)
-
-        # Leading vehicle
-        lead_color = (235, 75, 75) if self.dragging_lead else (200, 50, 50)
-        pygame.draw.circle(self.surface, lead_color, (int(self.lead_x), int(self.lead_y)), int(self.lead_r))
-        pygame.draw.circle(self.surface, (255, 100, 100), (int(self.lead_x), int(self.lead_y)), int(self.lead_r), 2)
+        # 1. Draw Highway boundaries and lanes (moving laterally relative to ego car)
+        left_edge = 140.0 + lateral_offset
+        right_edge = 440.0 + lateral_offset
+        lane_width = 100.0
         
-        lead_dir = self.lead_direction
-        pygame.draw.polygon(self.surface, (255, 255, 255), [
-            (self.lead_x, self.lead_y + lead_dir * 10),
-            (self.lead_x - 5, self.lead_y - lead_dir * 3),
-            (self.lead_x + 5, self.lead_y - lead_dir * 3)
+        # Road asphalt fill
+        pygame.draw.polygon(self.surface, (18, 22, 28), [
+            (left_edge, 0), (right_edge, 0),
+            (right_edge, self.height), (left_edge, self.height)
         ])
-
-        # Sensor rays (3 sensors)
-        car_front_x = self.x + (self.length_car / 2.0) * math.cos(self.theta)
-        car_front_y = self.y + (self.length_car / 2.0) * math.sin(self.theta)
         
-        for i, impact in enumerate(self.sensor_impact_pts):
-            if impact is not None:
-                dist = self.sensor_readings[i]
-                if dist < 25.0:
-                    color = (255, 50, 50)
-                elif dist < 50.0:
-                    color = (255, 200, 50)
-                else:
-                    color = (50, 200, 50)
-                    
-                pygame.draw.line(self.surface, color, (int(car_front_x), int(car_front_y)), (int(impact[0]), int(impact[1])), 1)
-                pygame.draw.circle(self.surface, color, (int(impact[0]), int(impact[1])), 3)
-
-        # Vehicle body
-        half_w = self.width_car / 2.0
-        half_l = self.length_car / 2.0
-        corners = [
-            (-half_l, -half_w),
-            (half_l, -half_w),
-            (half_l, half_w),
-            (-half_l, half_w)
-        ]
+        # Road edge lines (solid blue/grey)
+        pygame.draw.line(self.surface, (54, 73, 98), (left_edge, 0), (left_edge, self.height), 3)
+        pygame.draw.line(self.surface, (54, 73, 98), (right_edge, 0), (right_edge, self.height), 3)
         
-        rotated_corners = []
-        cos_t = math.cos(self.theta)
-        sin_t = math.sin(self.theta)
-        for cx, cy in corners:
-            rx = self.x + cx * cos_t - cy * sin_t
-            ry = self.y + cx * sin_t + cy * cos_t
-            rotated_corners.append((rx, ry))
+        # Lane divider dashed lines (scrolling downward)
+        for offset_y in range(int(self.road_scroll) - 80, self.height + 80, 80):
+            # Left lane marker
+            pygame.draw.line(self.surface, (100, 116, 139), 
+                             (left_edge + lane_width, offset_y), 
+                             (left_edge + lane_width, offset_y + 40), 2)
+            # Right lane marker
+            pygame.draw.line(self.surface, (100, 116, 139), 
+                             (left_edge + 2 * lane_width, offset_y), 
+                             (left_edge + 2 * lane_width, offset_y + 40), 2)
 
-        pygame.draw.polygon(self.surface, (60, 140, 240), rotated_corners)
-        pygame.draw.polygon(self.surface, (100, 180, 255), rotated_corners, 2)
-
-        # Wheels
-        wheel_w = 10
-        wheel_h = 4
-        for is_right in [False, True]:
-            f_offset_x = half_l - 6
-            f_offset_y = half_w if is_right else -half_w
-            fw_x = self.x + f_offset_x * cos_t - f_offset_y * sin_t
-            fw_y = self.y + f_offset_x * sin_t + f_offset_y * cos_t
+        # 2. Project Sensor Beams and Obstacles
+        car_front_x = self.width / 2.0
+        car_front_y = self.height - 125.0 # Bumper y position
+        
+        for i, angle_offset in enumerate(self.sensor_angles):
+            # Calculate beam angle
+            ray_angle = self.steering_angle + angle_offset
+            # Standard trigonometry: 0° points straight up (-y direction)
+            dx = math.sin(angle_offset)
+            dy = -math.cos(angle_offset)
             
-            wheel_theta = self.theta + self.steering_angle
-            w_cos = math.cos(wheel_theta)
-            w_sin = math.sin(wheel_theta)
+            dist_cm = self.sensor_readings[i]
+            dist_px = dist_cm * self.pixel_scale
             
-            w_corners = [
-                (-wheel_w/2, -wheel_h/2), (wheel_w/2, -wheel_h/2),
-                (wheel_w/2, wheel_h/2), (-wheel_w/2, wheel_h/2)
-            ]
-            rot_w_corners = []
-            for wx, wy in w_corners:
-                rwx = fw_x + wx * w_cos - wy * w_sin
-                rwy = fw_y + wx * w_sin + wy * w_cos
-                rot_w_corners.append((rwx, rwy))
-            pygame.draw.polygon(self.surface, (20, 20, 20), rot_w_corners)
-
-        for is_right in [False, True]:
-            r_offset_x = -half_l + 6
-            r_offset_y = half_w if is_right else -half_w
-            rw_x = self.x + r_offset_x * cos_t - r_offset_y * sin_t
-            rw_y = self.y + r_offset_x * sin_t + r_offset_y * cos_t
+            impact_x = car_front_x + dx * dist_px
+            impact_y = car_front_y + dy * dist_px
             
-            w_corners = [
-                (-wheel_w/2, -wheel_h/2), (wheel_w/2, -wheel_h/2),
-                (wheel_w/2, wheel_h/2), (-wheel_w/2, wheel_h/2)
-            ]
-            rot_w_corners = []
-            for wx, wy in w_corners:
-                rwx = rw_x + wx * cos_t - wy * sin_t
-                rwy = rw_y + wx * sin_t + wy * cos_t
-                rot_w_corners.append((rwx, rwy))
-            pygame.draw.polygon(self.surface, (20, 20, 20), rot_w_corners)
+            # Select color based on distance threat
+            if dist_cm < 40.0:
+                beam_color = (239, 68, 68)   # Alert Red
+                glow_color = (254, 226, 226)
+            elif dist_cm < 100.0:
+                beam_color = (245, 158, 11)  # Alert Amber/Yellow
+                glow_color = (254, 243, 199)
+            else:
+                beam_color = (16, 185, 129)  # ADAS Safe Green
+                glow_color = (209, 250, 229)
+                
+            # Draw sensor beam path
+            if dist_cm < self.max_sensor_range:
+                # Solid sensor line to obstacle
+                pygame.draw.line(self.surface, beam_color, (int(car_front_x), int(car_front_y)), (int(impact_x), int(impact_y)), 2)
+                
+                # Draw hazard obstacle barricade
+                obs_w = 40
+                obs_h = 16
+                pygame.draw.rect(self.surface, beam_color, 
+                                 (int(impact_x - obs_w/2), int(impact_y - obs_h/2), obs_w, obs_h), border_radius=4)
+                pygame.draw.rect(self.surface, glow_color, 
+                                 (int(impact_x - obs_w/2), int(impact_y - obs_h/2), obs_w, obs_h), 2, border_radius=4)
+                
+                # Draw warning light glow on the hazard
+                pygame.draw.circle(self.surface, beam_color, (int(impact_x), int(impact_y)), 6)
+                pygame.draw.circle(self.surface, (255, 255, 255), (int(impact_x), int(impact_y)), 2)
+                
+                # Draw distance text next to the obstacle
+                font = pygame.font.SysFont("Consolas", 12, bold=True)
+                txt = font.render(f"{int(dist_cm)}cm", True, (255, 255, 255))
+                self.surface.blit(txt, (int(impact_x) + 24, int(impact_y) - 6))
+            else:
+                # Dotted faint ray showing clear range
+                for step in range(0, int(self.max_sensor_range * self.pixel_scale), 15):
+                    rx = car_front_x + dx * step
+                    ry = car_front_y + dy * step
+                    pygame.draw.circle(self.surface, (16, 185, 129, 120), (int(rx), int(ry)), 1)
 
-        pygame.draw.line(self.surface, (255, 255, 255), 
-                         (int(self.x), int(self.y)), 
-                         (int(self.x + 18 * cos_t), int(self.y + 18 * sin_t)), 2)
-                         
+        # 3. Draw Ego Car body (Centered statically at bottom, tilts with steering)
+        car_surf = pygame.Surface((self.width_car + 20, self.length_car + 20), pygame.SRCALPHA)
+        
+        # Center of local surf
+        cx, cy = car_surf.get_width() / 2, car_surf.get_height() / 2
+        
+        # Chassis body rect
+        body_rect = pygame.Rect(cx - self.width_car/2, cy - self.length_car/2, self.width_car, self.length_car)
+        pygame.draw.rect(car_surf, (59, 130, 246), body_rect, border_radius=6) # Blue chassis
+        pygame.draw.rect(car_surf, (147, 197, 253), body_rect, 2, border_radius=6) # Cyan outline
+        
+        # Windshield
+        pygame.draw.rect(car_surf, (30, 41, 59), (cx - 8, cy - 12, 16, 8), border_radius=2)
+        # Headlights
+        pygame.draw.rect(car_surf, (253, 224, 71), (cx - 10, cy - self.length_car/2, 4, 3))
+        pygame.draw.rect(car_surf, (253, 224, 71), (cx + 6, cy - self.length_car/2, 4, 3))
+        
+        # Rotate car chassis based on steering visual yaw
+        yaw_deg = -math.degrees(self.steering_angle) * 0.4
+        yaw_deg = max(-25.0, min(25.0, yaw_deg))
+        rotated_car = pygame.transform.rotate(car_surf, yaw_deg)
+        rot_rect = rotated_car.get_rect(center=(int(car_front_x), int(car_front_y + self.length_car/2)))
+        
+        self.surface.blit(rotated_car, rot_rect.topleft)
+        
+        # 4. Premium Dashboard HUD Overlays
+        font_hud = pygame.font.SysFont("Consolas", 14, bold=True)
+        
+        # HUD: speed display
+        speed_kmh = self.speed * 3.6
+        speed_txt = font_hud.render(f"SPEED: {speed_kmh:.1f} km/h", True, (255, 255, 255))
+        self.surface.blit(speed_txt, (20, 20))
+        
+        # HUD: mode display
+        mode_str = "CONNECTED TELEMETRY" if self.speed == real_speed else "ACC SIMULATING"
+        mode_color = (59, 130, 246) if self.speed == real_speed else (245, 158, 11)
+        mode_txt = font_hud.render(f"MODE: {mode_str}", True, mode_color)
+        self.surface.blit(mode_txt, (20, 40))
+        
+        # Outer Border
+        pygame.draw.rect(self.surface, (30, 41, 59), (0, 0, self.width, self.height), 3)
+        
         return self.surface
