@@ -1550,6 +1550,22 @@
                 </div>
             </div>
             
+            <div class="panel-title" style="margin-top: 10px;">RAW ESP32 SENSOR FEED</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 5px;">
+                <div class="metric-box" style="padding: 10px; background: hsla(220, 18%, 10%, 0.65); border: 1px solid var(--panel-border); border-radius: 12px; text-align: center; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);">
+                    <div class="metric-val" id="val-raw-l" style="font-family: var(--font-headings); font-size: 1.05rem; font-weight: 700; color: var(--accent-blue);">N/A</div>
+                    <div class="metric-lbl" style="font-family: var(--font-headings); font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.75px;">Raw Left</div>
+                </div>
+                <div class="metric-box" style="padding: 10px; background: hsla(220, 18%, 10%, 0.65); border: 1px solid var(--panel-border); border-radius: 12px; text-align: center; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);">
+                    <div class="metric-val" id="val-raw-c" style="font-family: var(--font-headings); font-size: 1.05rem; font-weight: 700; color: var(--accent-green);">N/A</div>
+                    <div class="metric-lbl" style="font-family: var(--font-headings); font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.75px;">Raw Center</div>
+                </div>
+                <div class="metric-box" style="padding: 10px; background: hsla(220, 18%, 10%, 0.65); border: 1px solid var(--panel-border); border-radius: 12px; text-align: center; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);">
+                    <div class="metric-val" id="val-raw-r" style="font-family: var(--font-headings); font-size: 1.05rem; font-weight: 700; color: var(--accent-yellow);">N/A</div>
+                    <div class="metric-lbl" style="font-family: var(--font-headings); font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.75px;">Raw Right</div>
+                </div>
+            </div>
+            
             <div class="tel-card" style="margin-top: 5px;">
                 <div class="tel-label">Obstacle Relative Speed</div>
                 <div class="tel-value" id="val-vrel" style="font-size: 1.25rem;">+0.00 m/s</div>
@@ -2353,6 +2369,25 @@
                             fillBar.style.backgroundColor = "var(--accent-yellow)";
                         } else {
                             fillBar.style.backgroundColor = "var(--accent-green)";
+                        }
+                    }
+                });
+
+                // Update raw sensor values
+                const rawSensors = [
+                    { val: data.raw_dist_l, elementId: 'val-raw-l' },
+                    { val: data.raw_dist_c, elementId: 'val-raw-c' },
+                    { val: data.raw_dist_r, elementId: 'val-raw-r' }
+                ];
+                
+                rawSensors.forEach(rs => {
+                    const el = document.getElementById(rs.elementId);
+                    if (el) {
+                        if (rs.val !== undefined && rs.val !== null && data.connected) {
+                            const unit = (data.esp32_mode === 'http') ? ' mm' : ' cm';
+                            el.innerText = rs.val.toFixed(0) + unit;
+                        } else {
+                            el.innerText = "N/A";
                         }
                     }
                 });

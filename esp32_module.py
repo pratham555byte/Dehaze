@@ -4,7 +4,7 @@ import time
 import requests
 
 class ESP32Communication:
-    def __init__(self, esp32_ip="10.248.116.230", esp32_port=5005, local_port=5006, mode="http"):
+    def __init__(self, esp32_ip="10.33.14.230", esp32_port=5005, local_port=5006, mode="http"):
         self.esp32_ip = esp32_ip
         self.esp32_port = esp32_port
         self.local_port = local_port
@@ -24,6 +24,11 @@ class ESP32Communication:
         self.dist_c = 300.0
         self.dist_r = 300.0
         self.vehicle_speed = 0.0
+        
+        # Raw distance readings as received from ESP32
+        self.raw_dist_l = 0.0
+        self.raw_dist_c = 0.0
+        self.raw_dist_r = 0.0
         
         # HTTP Control State
         self.http_throttle = 0
@@ -86,6 +91,9 @@ class ESP32Communication:
                             self.dist_l = raw_l if raw_l > 2.0 else 300.0
                             self.dist_c = raw_c if raw_c > 2.0 else 300.0
                             self.dist_r = raw_r if raw_r > 2.0 else 300.0
+                            self.raw_dist_l = raw_l
+                            self.raw_dist_c = raw_c
+                            self.raw_dist_r = raw_r
                             self.vehicle_speed = float(parts[4])
                             self.last_packet_time = time.time()
                             self.connected = True
@@ -126,6 +134,10 @@ class ESP32Communication:
                         self.dist_l = l_val / 10.0
                         self.dist_c = c_val / 10.0
                         self.dist_r = r_val / 10.0
+                        # Save raw values exactly as polled from endpoint
+                        self.raw_dist_l = float(data.get("left", 0.0))
+                        self.raw_dist_c = float(data.get("center", 0.0))
+                        self.raw_dist_r = float(data.get("right", 0.0))
                         # Speed estimation based on throttle
                         self.vehicle_speed = float(abs(self.http_throttle)) / 10.0
                         self.last_packet_time = time.time()
@@ -180,6 +192,10 @@ class ESP32Communication:
             self.sim_dist_c = c
             self.sim_dist_r = r
             self.sim_speed = speed
+
+    def get_raw_telemetry(self):
+        with self.lock:
+            return self.raw_dist_l, self.raw_dist_c, self.raw_dist_r
 
     def get_telemetry(self):
         with self.lock:

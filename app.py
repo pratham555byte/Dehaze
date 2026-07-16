@@ -630,7 +630,7 @@ def run_dehaze_thread(video_path, model_name, resolution, fp16, preprocess_mode,
 # ==============================================================================
 
 dehaze_mod = DehazeModule(model_name='dehazeformer-t', resolution=320, device='auto')
-esp32_comm = ESP32Communication(esp32_ip="10.248.116.230", esp32_port=5005, local_port=5006, mode="http")
+esp32_comm = ESP32Communication(esp32_ip="10.33.14.230", esp32_port=5005, local_port=5006, mode="http")
 sensor_proc = SensorProcessing(ema_alpha=0.18, max_valid_range=300.0)
 acc_system = AdaptiveCruiseControl(target_distance=50.0, critical_distance=25.0, Kp=4.5, Kd=90.0)
 twin_sim = DigitalTwin(width=580, height=480)
@@ -1059,6 +1059,7 @@ def api_mouse():
 @app.route('/api/telemetry', methods=['GET'])
 def api_telemetry():
     connected, l_dist, c_dist, r_dist, real_speed = esp32_comm.get_telemetry()
+    raw_l, raw_c, raw_r = esp32_comm.get_raw_telemetry()
     
     # Correct unpacking of DehazeModule stats to prevent TypeError
     orig_frame, dehaze_frame, fps, latency_ms = dehaze_mod.get_frames()
@@ -1081,6 +1082,9 @@ def api_telemetry():
         "dist_l": round(l_dist, 1),
         "dist_c": round(c_dist, 1),
         "dist_r": round(r_dist, 1),
+        "raw_dist_l": round(raw_l, 1) if raw_l is not None else None,
+        "raw_dist_c": round(raw_c, 1) if raw_c is not None else None,
+        "raw_dist_r": round(raw_r, 1) if raw_r is not None else None,
         "v_rel": round(relative_velocity, 2),
         "ttc": round(runner.ttc, 2) if runner.ttc >= 0 else None,
         "dehaze_fps": round(fps, 1),
